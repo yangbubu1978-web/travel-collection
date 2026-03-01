@@ -583,41 +583,69 @@
         // Fetch image from link
         document.getElementById('fetchImageBtn').addEventListener('click', async () => {
             const link = document.getElementById('cardLink').value;
-            if (!link) {
-                alert('請先輸入連結');
-                return;
-            }
-
+            const title = document.getElementById('cardTitle').value;
+            
             const btn = document.getElementById('fetchImageBtn');
             btn.textContent = '⏳';
             btn.disabled = true;
 
             try {
-                // Use CORS proxy to fetch the page
-                const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(link);
-                const response = await fetch(proxyUrl);
-                const data = await response.json();
+                let imageUrl = null;
                 
-                // Parse the HTML content
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(data.contents, 'text/html');
-                
-                // Try to get og:image
-                let imageUrl = doc.querySelector('meta[property="og:image"]')?.content;
-                
-                // Try twitter:image as fallback
-                if (!imageUrl) {
-                    imageUrl = doc.querySelector('meta[name="twitter:image"]')?.content;
-                }
-
-                // Try to get first large image as last resort
-                if (!imageUrl) {
-                    const images = doc.querySelectorAll('img');
-                    for (const img of images) {
-                        if (img.src && img.width >= 200 && img.height >= 200) {
-                            imageUrl = img.src;
-                            break;
+                // If there's a link, try to get og:image from that page
+                if (link) {
+                    try {
+                        const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(link);
+                        const response = await fetch(proxyUrl);
+                        const data = await response.json();
+                        
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(data.contents, 'text/html');
+                        
+                        imageUrl = doc.querySelector('meta[property="og:image"]')?.content;
+                        if (!imageUrl) {
+                            imageUrl = doc.querySelector('meta[name="twitter:image"]')?.content;
                         }
+                    } catch (e) {
+                        console.log('Link fetch failed, trying title search');
+                    }
+                }
+                
+                // If no image from link, try searching by title
+                if (!imageUrl && title) {
+                    try {
+                        // Use Wikipedia API to find images
+                        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&pithumbsize=500&format=json&origin=*`;
+                        const response = await fetch(wikiUrl);
+                        const data = await response.json();
+                        
+                        const pages = data.query?.pages;
+                        if (pages) {
+                            for (const pageId in pages) {
+                                if (pages[pageId].thumbnail) {
+                                    imageUrl = pages[pageId].thumbnail.source;
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.log('Wikipedia search failed');
+                    }
+                }
+                
+                // Try Bing Images via a simple search (using DuckDuckGo's HTML results)
+                if (!imageUrl && title) {
+                    try {
+                        const searchUrl = `https://api.allorigins.win/get?url=${encodeURIComponent('https://duckduckgo.com/?q=' + encodeURIComponent(title + ' travel spot') + '&ia=images')}`;
+                        const response = await fetch(searchUrl);
+                        const data = await response.json();
+                        
+                        const imgMatch = data.contents?.match(/img src="(https:\/\/[^"]+\.(jpg|jpeg|png|webp))"/i);
+                        if (imgMatch) {
+                            imageUrl = imgMatch[1];
+                        }
+                    } catch (e) {
+                        console.log('Image search failed');
                     }
                 }
 
@@ -625,9 +653,6 @@
                     // Handle relative URLs
                     if (imageUrl.startsWith('//')) {
                         imageUrl = 'https:' + imageUrl;
-                    } else if (imageUrl.startsWith('/')) {
-                        const urlObj = new URL(link);
-                        imageUrl = urlObj.origin + imageUrl;
                     }
                     
                     document.getElementById('cardImage').value = imageUrl;
