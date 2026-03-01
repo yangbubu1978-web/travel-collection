@@ -402,22 +402,50 @@
             const link = document.getElementById('cardLink').value;
             const image = document.getElementById('cardImage').value;
 
-            const cardData = { title, category, tags, note, link, image, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-
             try {
                 if (id) {
-                    await updateDoc(doc(db, "cards", id), { ...cardData, updatedAt: new Date().toISOString() });
+                    // Edit existing - keep original createdAt
+                    const existingCard = cards.find(c => c.id === id);
+                    await updateDoc(doc(db, "cards", id), { 
+                        title, 
+                        category, 
+                        tags, 
+                        note, 
+                        link, 
+                        image, 
+                        createdAt: existingCard?.createdAt || new Date().toISOString(),
+                        updatedAt: new Date().toISOString() 
+                    });
                 } else {
-                    await addDoc(collection(db, "cards"), cardData);
+                    // Add new
+                    await addDoc(collection(db, "cards"), { 
+                        title, 
+                        category, 
+                        tags, 
+                        note, 
+                        link, 
+                        image, 
+                        createdAt: new Date().toISOString(), 
+                        updatedAt: new Date().toISOString() 
+                    });
                 }
                 modal.classList.remove('show');
             } catch (error) {
-                alert('儲存失敗');
+                console.error('Error:', error);
+                alert('儲存失敗: ' + error.message);
             }
         });
 
         function renderCards() {
-            let filteredCards = cards;
+            let filteredCards = [...cards];
+            
+            // Sort by createdAt (newest first)
+            filteredCards.sort((a, b) => {
+                const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return dateB - dateA;
+            });
+            
             if (currentFilter !== 'all') filteredCards = filteredCards.filter(c => c.category === currentFilter);
             if (searchQuery) filteredCards = filteredCards.filter(c => c.title.toLowerCase().includes(searchQuery) || (c.note && c.note.toLowerCase().includes(searchQuery)) || c.tags?.some(t => t.toLowerCase().includes(searchQuery)));
 
