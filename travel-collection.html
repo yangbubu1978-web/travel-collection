@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>旅行收藏庫 🏷️</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'PingFang TC', 'Helvetica Neue', sans-serif;
+            background: #f5f2eb;
+            color: #4a4a4a;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 30px 0;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 300;
+            letter-spacing: 4px;
+            color: #5d5d5d;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 0.85rem;
+            color: #8a8a8a;
+            letter-spacing: 2px;
+        }
+
+        /* Search Bar */
+        .search-box {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 15px 20px;
+            border: none;
+            border-radius: 30px;
+            background: white;
+            font-size: 1rem;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+            outline: none;
+            transition: box-shadow 0.3s;
+        }
+
+        .search-input:focus {
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+        }
+
+        /* Category Tabs */
+        .categories {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .cat-btn {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 25px;
+            background: white;
+            color: #7a7a7a;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        }
+
+        .cat-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        }
+
+        .cat-btn.active {
+            background: #6b8e7a;
+            color: white;
+        }
+
+        /* Add Button */
+        .add-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #6b8e7a;
+            color: white;
+            border: none;
+            font-size: 1.8rem;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(107, 142, 122, 0.4);
+            transition: transform 0.3s;
+            z-index: 100;
+        }
+
+        .add-btn:hover {
+            transform: scale(1.1);
+        }
+
+        /* Cards */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.04);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: #3d3d3d;
+        }
+
+        .card-category {
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: #f0ebe3;
+            color: #7a7a7a;
+        }
+
+        .card-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .tag {
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            border-radius: 10px;
+            background: #e8f0eb;
+            color: #5a7a60;
+        }
+
+        .card-note {
+            font-size: 0.85rem;
+            color: #6a6a6a;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .card-link {
+            display: inline-block;
+            font-size: 0.8rem;
+            color: #8ba893;
+            text-decoration: none;
+        }
+
+        .card-link:hover {
+            text-decoration: underline;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .card-action-btn {
+            padding: 6px 15px;
+            border: none;
+            border-radius: 15px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+
+        .card-action-btn.edit {
+            background: #f5f2eb;
+            color: #6a6a6a;
+        }
+
+        .card-action-btn.delete {
+            background: #fce8e8;
+            color: #c47a7a;
+        }
+
+        .card-action-btn:hover {
+            opacity: 0.7;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #9a9a9a;
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.4);
+            z-index: 200;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            width: 100%;
+            max-width: 450px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal h2 {
+            font-weight: 400;
+            margin-bottom: 25px;
+            color: #4a4a4a;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: #7a7a7a;
+            margin-bottom: 8px;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #e8e8e8;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            border-color: #6b8e7a;
+        }
+
+        .form-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 25px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+
+        .modal-btn.cancel {
+            background: #f0ebe3;
+            color: #6a6a6a;
+        }
+
+        .modal-btn.save {
+            background: #6b8e7a;
+            color: white;
+        }
+
+        .modal-btn:hover {
+            opacity: 0.85;
+        }
+
+        /* Stats */
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 25px;
+            padding: 15px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 1.5rem;
+            color: #6b8e7a;
+            font-weight: 500;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #9a9a9a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>旅行收藏庫</h1>
+            <p class="subtitle">TRAVEL COLLECTION</p>
+        </header>
+
+        <div class="search-box">
+            <input type="text" class="search-input" placeholder="🔍 搜尋景點、美食、筆記..." id="searchInput">
+        </div>
+
+        <div class="categories">
+            <button class="cat-btn active" data-cat="all">全部</button>
+            <button class="cat-btn" data-cat="景點">🌿 景點</button>
+            <button class="cat-btn" data-cat="美食">🍜 美食</button>
+            <button class="cat-btn" data-cat="住宿">🏠 住宿</button>
+            <button class="cat-btn" data-cat="活動">🎪 活動</button>
+            <button class="cat-btn" data-cat="登山">⛰️ 登山</button>
+            <button class="cat-btn" data-cat="甜點">🍰 甜點</button>
+            <button class="cat-btn" data-cat="攝影">📷 攝影</button>
+            <button class="cat-btn" data-cat="秘境">🔮 秘境</button>
+        </div>
+
+        <div class="stats" id="stats">
+            <div class="stat-item">
+                <div class="stat-number" id="totalCount">0</div>
+                <div class="stat-label">總收藏</div>
+            </div>
+        </div>
+
+        <div class="cards-grid" id="cardsGrid">
+            <!-- Cards will be rendered here -->
+        </div>
+
+        <div class="empty-state" id="emptyState" style="display: none;">
+            <div class="empty-icon">📍</div>
+            <p>還沒有收藏～<br>點擊 + 按鈕開始新增吧！</p>
+        </div>
+    </div>
+
+    <button class="add-btn" id="addBtn">+</button>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">新增收藏</h2>
+            <form id="cardForm">
+                <input type="hidden" id="cardId">
+                
+                <div class="form-group">
+                    <label>標題 *</label>
+                    <input type="text" id="cardTitle" placeholder="例：清境農場" required>
+                </div>
+
+                <div class="form-group">
+                    <label>分類 *</label>
+                    <select id="cardCategory">
+                        <option value="景點">🌿 景點</option>
+                        <option value="美食">🍜 美食</option>
+                        <option value="住宿">🏠 住宿</option>
+                        <option value="活動">🎪 活動</option>
+                        <option value="登山">⛰️ 登山</option>
+                        <option value="甜點">🍰 甜點</option>
+                        <option value="攝影">📷 攝影</option>
+                        <option value="秘境">🔮 秘境</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Tags（用逗號分隔）</label>
+                    <input type="text" id="cardTags" placeholder="例：自然,拍照,療癒">
+                </div>
+
+                <div class="form-group">
+                    <label>筆記 / 備註</label>
+                    <textarea id="cardNote" placeholder="可以寫下你的心得、推薦原因、適合什麼季節去..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>連結（可選）</label>
+                    <input type="url" id="cardLink" placeholder="https://...">
+                </div>
+
+                <div class="modal-buttons">
+                    <button type="button" class="modal-btn cancel" id="cancelBtn">取消</button>
+                    <button type="submit" class="modal-btn save">儲存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Data Store
+        let cards = JSON.parse(localStorage.getItem('travelCards')) || [];
+        let currentFilter = 'all';
+        let searchQuery = '';
+
+        // DOM Elements
+        const modal = document.getElementById('modal');
+        const cardForm = document.getElementById('cardForm');
+        const cardsGrid = document.getElementById('cardsGrid');
+        const emptyState = document.getElementById('emptyState');
+        const searchInput = document.getElementById('searchInput');
+        const addBtn = document.getElementById('addBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const modalTitle = document.getElementById('modalTitle');
+
+        // Category Buttons
+        document.querySelectorAll('.cat-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.cat;
+                renderCards();
+            });
+        });
+
+        // Search
+        searchInput.addEventListener('input', (e) => {
+            searchQuery = e.target.value.toLowerCase();
+            renderCards();
+        });
+
+        // Add Button
+        addBtn.addEventListener('click', () => {
+            cardForm.reset();
+            document.getElementById('cardId').value = '';
+            modalTitle.textContent = '新增收藏';
+            modal.classList.add('show');
+        });
+
+        // Cancel Button
+        cancelBtn.addEventListener('click', () => {
+            modal.classList.remove('show');
+        });
+
+        // Close modal on outside click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('show');
+            }
+        });
+
+        // Save Card
+        cardForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const id = document.getElementById('cardId').value;
+            const title = document.getElementById('cardTitle').value;
+            const category = document.getElementById('cardCategory').value;
+            const tags = document.getElementById('cardTags').value.split(',').map(t => t.trim()).filter(t => t);
+            const note = document.getElementById('cardNote').value;
+            const link = document.getElementById('cardLink').value;
+
+            const cardData = {
+                id: id || Date.now().toString(),
+                title,
+                category,
+                tags,
+                note,
+                link,
+                createdAt: id ? cards.find(c => c.id === id)?.createdAt : new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+
+            if (id) {
+                const index = cards.findIndex(c => c.id === id);
+                cards[index] = cardData;
+            } else {
+                cards.push(cardData);
+            }
+
+            saveToLocalStorage();
+            modal.classList.remove('show');
+            renderCards();
+        });
+
+        // Render Cards
+        function renderCards() {
+            let filteredCards = cards;
+
+            // Filter by category
+            if (currentFilter !== 'all') {
+                filteredCards = filteredCards.filter(c => c.category === currentFilter);
+            }
+
+            // Filter by search
+            if (searchQuery) {
+                filteredCards = filteredCards.filter(c => 
+                    c.title.toLowerCase().includes(searchQuery) ||
+                    c.note.toLowerCase().includes(searchQuery) ||
+                    c.tags.some(t => t.toLowerCase().includes(searchQuery))
+                );
+            }
+
+            // Update stats
+            document.getElementById('totalCount').textContent = filteredCards.length;
+
+            // Show empty state
+            if (filteredCards.length === 0) {
+                cardsGrid.style.display = 'none';
+                emptyState.style.display = 'block';
+                return;
+            }
+
+            cardsGrid.style.display = 'grid';
+            emptyState.style.display = 'none';
+
+            cardsGrid.innerHTML = filteredCards.map(card => `
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">${card.title}</div>
+                        <div class="card-category">${card.category}</div>
+                    </div>
+                    ${card.tags.length > 0 ? `
+                        <div class="card-tags">
+                            ${card.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
+                        </div>
+                    ` : ''}
+                    ${card.note ? `<div class="card-note">${card.note}</div>` : ''}
+                    ${card.link ? `<a href="${card.link}" target="_blank" class="card-link">🔗 查看來源</a>` : ''}
+                    <div class="card-actions">
+                        <button class="card-action-btn edit" onclick="editCard('${card.id}')">編輯</button>
+                        <button class="card-action-btn delete" onclick="deleteCard('${card.id}')">刪除</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Edit Card
+        window.editCard = function(id) {
+            const card = cards.find(c => c.id === id);
+            if (!card) return;
+
+            document.getElementById('cardId').value = card.id;
+            document.getElementById('cardTitle').value = card.title;
+            document.getElementById('cardCategory').value = card.category;
+            document.getElementById('cardTags').value = card.tags.join(', ');
+            document.getElementById('cardNote').value = card.note;
+            document.getElementById('cardLink').value = card.link || '';
+            
+            modalTitle.textContent = '編輯收藏';
+            modal.classList.add('show');
+        };
+
+        // Delete Card
+        window.deleteCard = function(id) {
+            if (confirm('確定要刪除這個收藏嗎？')) {
+                cards = cards.filter(c => c.id !== id);
+                saveToLocalStorage();
+                renderCards();
+            }
+        };
+
+        // Save to LocalStorage
+        function saveToLocalStorage() {
+            localStorage.setItem('travelCards', JSON.stringify(cards));
+        }
+
+        // Export/Import functions for backup
+        window.exportData = function() {
+            const data = JSON.stringify(cards, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'travel-collection-backup.json';
+            a.click();
+        };
+
+        window.importData = function(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    cards = JSON.parse(e.target.result);
+                    saveToLocalStorage();
+                    renderCards();
+                    alert('匯入成功！');
+                } catch (err) {
+                    alert('檔案格式錯誤！');
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        // Initial render
+        renderCards();
+    </script>
+</body>
+</html>
