@@ -139,7 +139,7 @@
         .card {
             background: white;
             border-radius: 15px;
-            padding: 20px;
+            overflow: hidden;
             box-shadow: 0 2px 15px rgba(0,0,0,0.04);
             transition: transform 0.3s, box-shadow 0.3s;
             cursor: pointer;
@@ -148,6 +148,17 @@
         .card:hover {
             transform: translateY(-5px);
             box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+        }
+
+        .card-image {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            background: #f0f0f0;
+        }
+
+        .card-body {
+            padding: 20px;
         }
 
         .card-header {
@@ -465,7 +476,18 @@
 
                 <div class="form-group">
                     <label>連結（可選）</label>
-                    <input type="url" id="cardLink" placeholder="https://...">
+                    <div style="display: flex; gap: 8px;">
+                        <input type="url" id="cardLink" placeholder="https://..." style="flex: 1;">
+                        <button type="button" class="modal-btn save" id="fetchImageBtn" style="flex: 0; padding: 12px 15px;">🔍</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>圖片網址（可選）</label>
+                    <input type="url" id="cardImage" placeholder="自動抓取或手動貼上">
+                    <div id="imagePreview" style="margin-top: 8px; display: none;">
+                        <img id="previewImg" style="width: 100px; height: 100px; object-fit: cover; border-radius: 8px;">
+                    </div>
                 </div>
 
                 <div class="modal-buttons">
@@ -548,6 +570,7 @@
         addBtn.addEventListener('click', () => {
             cardForm.reset();
             document.getElementById('cardId').value = '';
+            document.getElementById('imagePreview').style.display = 'none';
             modalTitle.textContent = '新增收藏';
             modal.classList.add('show');
         });
@@ -555,6 +578,82 @@
         // Cancel Button
         cancelBtn.addEventListener('click', () => {
             modal.classList.remove('show');
+        });
+
+        // Fetch image from link
+        document.getElementById('fetchImageBtn').addEventListener('click', async () => {
+            const link = document.getElementById('cardLink').value;
+            if (!link) {
+                alert('請先輸入連結');
+                return;
+            }
+
+            const btn = document.getElementById('fetchImageBtn');
+            btn.textContent = '⏳';
+            btn.disabled = true;
+
+            try {
+                // Use CORS proxy to fetch the page
+                const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(link);
+                const response = await fetch(proxyUrl);
+                const data = await response.json();
+                
+                // Parse the HTML content
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(data.contents, 'text/html');
+                
+                // Try to get og:image
+                let imageUrl = doc.querySelector('meta[property="og:image"]')?.content;
+                
+                // Try twitter:image as fallback
+                if (!imageUrl) {
+                    imageUrl = doc.querySelector('meta[name="twitter:image"]')?.content;
+                }
+
+                // Try to get first large image as last resort
+                if (!imageUrl) {
+                    const images = doc.querySelectorAll('img');
+                    for (const img of images) {
+                        if (img.src && img.width >= 200 && img.height >= 200) {
+                            imageUrl = img.src;
+                            break;
+                        }
+                    }
+                }
+
+                if (imageUrl) {
+                    // Handle relative URLs
+                    if (imageUrl.startsWith('//')) {
+                        imageUrl = 'https:' + imageUrl;
+                    } else if (imageUrl.startsWith('/')) {
+                        const urlObj = new URL(link);
+                        imageUrl = urlObj.origin + imageUrl;
+                    }
+                    
+                    document.getElementById('cardImage').value = imageUrl;
+                    document.getElementById('previewImg').src = imageUrl;
+                    document.getElementById('imagePreview').style.display = 'block';
+                } else {
+                    alert('找不到圖片，請手動貼上圖片網址');
+                }
+            } catch (error) {
+                console.error('Error fetching:', error);
+                alert('抓取失敗，請手動貼上圖片網址');
+            } finally {
+                btn.textContent = '🔍';
+                btn.disabled = false;
+            }
+        });
+
+        // Show image preview when typing
+        document.getElementById('cardImage').addEventListener('input', (e) => {
+            const url = e.target.value;
+            if (url) {
+                document.getElementById('previewImg').src = url;
+                document.getElementById('imagePreview').style.display = 'block';
+            } else {
+                document.getElementById('imagePreview').style.display = 'none';
+            }
         });
 
         // Close modal on outside click
@@ -581,6 +680,7 @@
                 tags,
                 note,
                 link,
+                image: document.getElementById('cardImage').value,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             };
@@ -642,20 +742,23 @@
 
             cardsGrid.innerHTML = filteredCards.map(card => `
                 <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">${card.title}</div>
-                        <div class="card-category">${card.category}</div>
-                    </div>
-                    ${card.tags && card.tags.length > 0 ? `
-                        <div class="card-tags">
-                            ${card.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
+                    ${card.image ? `<img class="card-image" src="${card.image}" alt="${card.title}" onerror="this.style.display='none'">` : ''}
+                    <div class="card-body">
+                        <div class="card-header">
+                            <div class="card-title">${card.title}</div>
+                            <div class="card-category">${card.category}</div>
                         </div>
-                    ` : ''}
-                    ${card.note ? `<div class="card-note">${card.note}</div>` : ''}
-                    ${card.link ? `<a href="${card.link}" target="_blank" class="card-link">🔗 查看來源</a>` : ''}
-                    <div class="card-actions">
-                        <button class="card-action-btn edit" onclick="editCard('${card.id}')">編輯</button>
-                        <button class="card-action-btn delete" onclick="deleteCard('${card.id}')">刪除</button>
+                        ${card.tags && card.tags.length > 0 ? `
+                            <div class="card-tags">
+                                ${card.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
+                            </div>
+                        ` : ''}
+                        ${card.note ? `<div class="card-note">${card.note}</div>` : ''}
+                        ${card.link ? `<a href="${card.link}" target="_blank" class="card-link">🔗 查看來源</a>` : ''}
+                        <div class="card-actions">
+                            <button class="card-action-btn edit" onclick="editCard('${card.id}')">編輯</button>
+                            <button class="card-action-btn delete" onclick="deleteCard('${card.id}')">刪除</button>
+                        </div>
                     </div>
                 </div>
             `).join('');
@@ -672,6 +775,14 @@
             document.getElementById('cardTags').value = card.tags ? card.tags.join(', ') : '';
             document.getElementById('cardNote').value = card.note || '';
             document.getElementById('cardLink').value = card.link || '';
+            document.getElementById('cardImage').value = card.image || '';
+            
+            if (card.image) {
+                document.getElementById('previewImg').src = card.image;
+                document.getElementById('imagePreview').style.display = 'block';
+            } else {
+                document.getElementById('imagePreview').style.display = 'none';
+            }
             
             modalTitle.textContent = '編輯收藏';
             modal.classList.add('show');
