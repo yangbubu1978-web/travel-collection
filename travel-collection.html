@@ -44,6 +44,16 @@
             letter-spacing: 2px;
         }
 
+        .sync-status {
+            font-size: 0.75rem;
+            color: #8a8a8a;
+            margin-top: 8px;
+        }
+
+        .sync-status.synced {
+            color: #6b8e7a;
+        }
+
         /* Search Bar */
         .search-box {
             position: relative;
@@ -363,6 +373,13 @@
             font-size: 0.75rem;
             color: #9a9a9a;
         }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #8a8a8a;
+        }
     </style>
 </head>
 <body>
@@ -370,6 +387,7 @@
         <header>
             <h1>旅行收藏庫</h1>
             <p class="subtitle">TRAVEL COLLECTION</p>
+            <p class="sync-status" id="syncStatus">🔄 載入中...</p>
         </header>
 
         <div class="search-box">
@@ -395,7 +413,9 @@
             </div>
         </div>
 
-        <div class="cards-grid" id="cardsGrid">
+        <div class="loading" id="loading">🔄 載入資料中...</div>
+
+        <div class="cards-grid" id="cardsGrid" style="display: none;">
             <!-- Cards will be rendered here -->
         </div>
 
@@ -456,9 +476,27 @@
         </div>
     </div>
 
-    <script>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyCHEVUsY-Q9A4SM8EBodKFbJvZaBNTIgEo",
+            authDomain: "travel-collection-34302.firebaseapp.com",
+            projectId: "travel-collection-34302",
+            storageBucket: "travel-collection-34302.firebasestorage.app",
+            messagingSenderId: "849403386441",
+            appId: "1:849403386441:web:ae5db12b360dbf0778bd98"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
         // Data Store
-        let cards = JSON.parse(localStorage.getItem('travelCards')) || [];
+        let cards = [];
         let currentFilter = 'all';
         let searchQuery = '';
 
@@ -467,10 +505,28 @@
         const cardForm = document.getElementById('cardForm');
         const cardsGrid = document.getElementById('cardsGrid');
         const emptyState = document.getElementById('emptyState');
+        const loading = document.getElementById('loading');
         const searchInput = document.getElementById('searchInput');
         const addBtn = document.getElementById('addBtn');
         const cancelBtn = document.getElementById('cancelBtn');
         const modalTitle = document.getElementById('modalTitle');
+        const syncStatus = document.getElementById('syncStatus');
+
+        // Real-time sync with Firestore
+        const unsubscribe = onSnapshot(collection(db, "cards"), (snapshot) => {
+            cards = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            renderCards();
+            syncStatus.textContent = '✓ 已同步';
+            syncStatus.classList.add('synced');
+            loading.style.display = 'none';
+        }, (error) => {
+            console.error("Error fetching cards: ", error);
+            syncStatus.textContent = '⚠️ 同步失敗';
+            loading.textContent = '載入失敗，請重新整理';
+        });
 
         // Category Buttons
         document.querySelectorAll('.cat-btn').forEach(btn => {
@@ -509,7 +565,7 @@
         });
 
         // Save Card
-        cardForm.addEventListener('submit', (e) => {
+        cardForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const id = document.getElementById('cardId').value;
@@ -520,26 +576,31 @@
             const link = document.getElementById('cardLink').value;
 
             const cardData = {
-                id: id || Date.now().toString(),
                 title,
                 category,
                 tags,
                 note,
                 link,
-                createdAt: id ? cards.find(c => c.id === id)?.createdAt : new Date().toISOString(),
+                createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             };
 
-            if (id) {
-                const index = cards.findIndex(c => c.id === id);
-                cards[index] = cardData;
-            } else {
-                cards.push(cardData);
+            try {
+                if (id) {
+                    // Update existing
+                    await updateDoc(doc(db, "cards", id), {
+                        ...cardData,
+                        updatedAt: new Date().toISOString()
+                    });
+                } else {
+                    // Add new
+                    await addDoc(collection(db, "cards"), cardData);
+                }
+                modal.classList.remove('show');
+            } catch (error) {
+                console.error("Error saving card: ", error);
+                alert('儲存失敗，請再試一次');
             }
-
-            saveToLocalStorage();
-            modal.classList.remove('show');
-            renderCards();
         });
 
         // Render Cards
@@ -555,7 +616,7 @@
             if (searchQuery) {
                 filteredCards = filteredCards.filter(c => 
                     c.title.toLowerCase().includes(searchQuery) ||
-                    c.note.toLowerCase().includes(searchQuery) ||
+                    (c.note && c.note.toLowerCase().includes(searchQuery)) ||
                     c.tags.some(t => t.toLowerCase().includes(searchQuery))
                 );
             }
@@ -564,6 +625,12 @@
             document.getElementById('totalCount').textContent = filteredCards.length;
 
             // Show empty state
+            if (filteredCards.length === 0 && cards.length === 0) {
+                cardsGrid.style.display = 'none';
+                emptyState.style.display = 'none';
+                return;
+            }
+
             if (filteredCards.length === 0) {
                 cardsGrid.style.display = 'none';
                 emptyState.style.display = 'block';
@@ -579,7 +646,7 @@
                         <div class="card-title">${card.title}</div>
                         <div class="card-category">${card.category}</div>
                     </div>
-                    ${card.tags.length > 0 ? `
+                    ${card.tags && card.tags.length > 0 ? `
                         <div class="card-tags">
                             ${card.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
                         </div>
@@ -602,8 +669,8 @@
             document.getElementById('cardId').value = card.id;
             document.getElementById('cardTitle').value = card.title;
             document.getElementById('cardCategory').value = card.category;
-            document.getElementById('cardTags').value = card.tags.join(', ');
-            document.getElementById('cardNote').value = card.note;
+            document.getElementById('cardTags').value = card.tags ? card.tags.join(', ') : '';
+            document.getElementById('cardNote').value = card.note || '';
             document.getElementById('cardLink').value = card.link || '';
             
             modalTitle.textContent = '編輯收藏';
@@ -611,47 +678,16 @@
         };
 
         // Delete Card
-        window.deleteCard = function(id) {
+        window.deleteCard = async function(id) {
             if (confirm('確定要刪除這個收藏嗎？')) {
-                cards = cards.filter(c => c.id !== id);
-                saveToLocalStorage();
-                renderCards();
+                try {
+                    await deleteDoc(doc(db, "cards", id));
+                } catch (error) {
+                    console.error("Error deleting card: ", error);
+                    alert('刪除失敗，請再試一次');
+                }
             }
         };
-
-        // Save to LocalStorage
-        function saveToLocalStorage() {
-            localStorage.setItem('travelCards', JSON.stringify(cards));
-        }
-
-        // Export/Import functions for backup
-        window.exportData = function() {
-            const data = JSON.stringify(cards, null, 2);
-            const blob = new Blob([data], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'travel-collection-backup.json';
-            a.click();
-        };
-
-        window.importData = function(file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    cards = JSON.parse(e.target.result);
-                    saveToLocalStorage();
-                    renderCards();
-                    alert('匯入成功！');
-                } catch (err) {
-                    alert('檔案格式錯誤！');
-                }
-            };
-            reader.readAsText(file);
-        };
-
-        // Initial render
-        renderCards();
     </script>
 </body>
 </html>
