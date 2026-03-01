@@ -145,17 +145,43 @@
                 </div>
                 <div class="form-group">
                     <label>分類 *</label>
-                    <select id="cardCategory">
-                        <option value="景點">🌿 景點</option>
-                        <option value="美食">🍜 美食</option>
-                        <option value="住宿">🏠 住宿</option>
-                        <option value="活動">🎪 活動</option>
-                        <option value="登山">⛰️ 登山</option>
-                        <option value="甜點">🍰 甜點</option>
-                        <option value="攝影">📷 攝影</option>
-                        <option value="秘境">🔮 秘境</option>
-                    </select>
+                    <div class="category-buttons" id="categoryButtons">
+                        <button type="button" class="cat-select-btn" data-value="景點">🌿 景點</button>
+                        <button type="button" class="cat-select-btn" data-value="美食">🍜 美食</button>
+                        <button type="button" class="cat-select-btn" data-value="住宿">🏠 住宿</button>
+                        <button type="button" class="cat-select-btn" data-value="活動">🎪 活動</button>
+                        <button type="button" class="cat-select-btn" data-value="登山">⛰️ 登山</button>
+                        <button type="button" class="cat-select-btn" data-value="甜點">🍰 甜點</button>
+                        <button type="button" class="cat-select-btn" data-value="攝影">📷 攝影</button>
+                        <button type="button" class="cat-select-btn" data-value="秘境">🔮 秘境</button>
+                    </div>
+                    <input type="hidden" id="cardCategory" value="景點">
                 </div>
+
+                <style>
+                    .category-buttons {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 8px;
+                    }
+                    .cat-select-btn {
+                        padding: 10px 18px;
+                        border: 2px solid #e8e8e8;
+                        border-radius: 20px;
+                        background: white;
+                        cursor: pointer;
+                        font-size: 0.9rem;
+                        transition: all 0.2s;
+                    }
+                    .cat-select-btn:hover {
+                        border-color: #6b8e7a;
+                    }
+                    .cat-select-btn.selected {
+                        background: #6b8e7a;
+                        color: white;
+                        border-color: #6b8e7a;
+                    }
+                </style>
                 <div class="form-group">
                     <label>Tags（用逗號分隔）</label>
                     <input type="text" id="cardTags" placeholder="例：自然,拍照,療癒">
@@ -293,6 +319,10 @@
             cardForm.reset();
             document.getElementById('cardId').value = '';
             document.getElementById('imagePreview').style.display = 'none';
+            // Reset category buttons
+            document.querySelectorAll('.cat-select-btn').forEach(b => b.classList.remove('selected'));
+            document.querySelector('.cat-select-btn').classList.add('selected');
+            document.getElementById('cardCategory').value = '景點';
             modalTitle.textContent = '新增收藏';
             modal.classList.add('show');
         });
@@ -434,6 +464,10 @@
             document.getElementById('cardId').value = card.id;
             document.getElementById('cardTitle').value = card.title;
             document.getElementById('cardCategory').value = card.category;
+            // Update category buttons
+            document.querySelectorAll('.cat-select-btn').forEach(b => {
+                b.classList.toggle('selected', b.dataset.value === card.category);
+            });
             document.getElementById('cardTags').value = card.tags?.join(', ') || '';
             document.getElementById('cardNote').value = card.note || '';
             document.getElementById('cardLink').value = card.link || '';
