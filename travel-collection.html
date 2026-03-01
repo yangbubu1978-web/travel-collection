@@ -586,35 +586,67 @@
             const title = document.getElementById('cardTitle').value;
             
             const btn = document.getElementById('fetchImageBtn');
+            const originalText = btn.textContent;
             btn.textContent = '⏳';
             btn.disabled = true;
 
             try {
                 let imageUrl = null;
+                let imageSources = [];
                 
-                // If there's a link, try to get og:image from that page
+                // If there's a link, try to get images from that page
                 if (link) {
                     try {
-                        const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(link);
-                        const response = await fetch(proxyUrl);
-                        const data = await response.json();
+                        // Try multiple CORS proxies
+                        const proxies = [
+                            'https://api.allorigins.win/get?url=' + encodeURIComponent(link),
+                            'https://corsproxy.io/?' + encodeURIComponent(link)
+                        ];
                         
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(data.contents, 'text/html');
-                        
-                        imageUrl = doc.querySelector('meta[property="og:image"]')?.content;
-                        if (!imageUrl) {
-                            imageUrl = doc.querySelector('meta[name="twitter:image"]')?.content;
+                        for (const proxyUrl of proxies) {
+                            try {
+                                const response = await fetch(proxyUrl, { timeout: 10000 });
+                                const contentType = response.headers.get('content-type') || '';
+                                
+                                if (contentType.includes('application/json')) {
+                                    const data = await response.json();
+                                    if (data.contents) {
+                                        const parser = new DOMParser();
+                                        const doc = parser.parseFromString(data.contents, 'text/html');
+                                        
+                                        // Get all image candidates
+                                        const ogImage = doc.querySelector('meta[property="og:image"]')?.content;
+                                        const twitterImage = doc.querySelector('meta[name="twitter:image"]')?.content;
+                                        const images = Array.from(doc.querySelectorAll('img'))
+                                            .filter(img => img.src && img.width >= 150 && img.height >= 150)
+                                            .map(img => ({
+                                                src: img.src,
+                                                width: img.width,
+                                                height: img.height
+                                            }))
+                                            .sort((a, b) => (b.width * b.height) - (a.width * a.height));
+                                        
+                                        imageSources = [
+                                            ogImage,
+                                            twitterImage,
+                                            ...images.map(i => i.src)
+                                        ].filter(Boolean);
+                                        
+                                        if (imageSources.length > 0) break;
+                                    }
+                                }
+                            } catch (e) {
+                                console.log('Proxy failed, trying next...');
+                            }
                         }
                     } catch (e) {
-                        console.log('Link fetch failed, trying title search');
+                        console.log('Link fetch failed');
                     }
                 }
-                
-                // If no image from link, try searching by title
-                if (!imageUrl && title) {
+
+                // If we have a title but no images from link, try Wikipedia
+                if (imageSources.length === 0 && title) {
                     try {
-                        // Use Wikipedia API to find images
                         const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&pithumbsize=500&format=json&origin=*`;
                         const response = await fetch(wikiUrl);
                         const data = await response.json();
@@ -623,7 +655,7 @@
                         if (pages) {
                             for (const pageId in pages) {
                                 if (pages[pageId].thumbnail) {
-                                    imageUrl = pages[pageId].thumbnail.source;
+                                    imageSources.push(pages[pageId].thumbnail.source);
                                     break;
                                 }
                             }
@@ -632,40 +664,45 @@
                         console.log('Wikipedia search failed');
                     }
                 }
-                
-                // Try Bing Images via a simple search (using DuckDuckGo's HTML results)
-                if (!imageUrl && title) {
-                    try {
-                        const searchUrl = `https://api.allorigins.win/get?url=${encodeURIComponent('https://duckduckgo.com/?q=' + encodeURIComponent(title + ' travel spot') + '&ia=images')}`;
-                        const response = await fetch(searchUrl);
-                        const data = await response.json();
-                        
-                        const imgMatch = data.contents?.match(/img src="(https:\/\/[^"]+\.(jpg|jpeg|png|webp))"/i);
-                        if (imgMatch) {
-                            imageUrl = imgMatch[1];
+
+                // Use the first valid image
+                if (imageSources.length > 0) {
+                    for (let img of imageSources) {
+                        // Handle relative URLs
+                        if (img.startsWith('//')) {
+                            img = 'https:' + img;
+                        } else if (img.startsWith('/')) {
+                            try {
+                                const urlObj = new URL(link);
+                                img = urlObj.origin + img;
+                            } catch (e) {
+                                continue;
+                            }
                         }
-                    } catch (e) {
-                        console.log('Image search failed');
+                        
+                        // Verify it's a valid image URL
+                        if (img && (img.startsWith('http://') || img.startsWith('https://')) && 
+                            (img.includes('.jpg') || img.includes('.jpeg') || img.includes('.png') || 
+                             img.includes('.webp') || img.includes('.gif') || img.includes('wikipedia') ||
+                             img.includes('og:image'))) {
+                            imageUrl = img;
+                            break;
+                        }
                     }
                 }
 
                 if (imageUrl) {
-                    // Handle relative URLs
-                    if (imageUrl.startsWith('//')) {
-                        imageUrl = 'https:' + imageUrl;
-                    }
-                    
                     document.getElementById('cardImage').value = imageUrl;
                     document.getElementById('previewImg').src = imageUrl;
                     document.getElementById('imagePreview').style.display = 'block';
                 } else {
-                    alert('找不到圖片，請手動貼上圖片網址');
+                    alert('無法自動抓取圖片，請手動複製圖片網址後貼上');
                 }
             } catch (error) {
-                console.error('Error fetching:', error);
+                console.error('Error:', error);
                 alert('抓取失敗，請手動貼上圖片網址');
             } finally {
-                btn.textContent = '🔍';
+                btn.textContent = originalText;
                 btn.disabled = false;
             }
         });
