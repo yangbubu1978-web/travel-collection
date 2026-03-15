@@ -39,6 +39,7 @@
         .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
         .card-title { font-size: 1.1rem; font-weight: 500; color: #3d3d3d; }
         .card-category { font-size: 0.7rem; padding: 4px 10px; border-radius: 12px; background: #f0ebe3; color: #7a7a7a; }
+        .card-categories { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
         .card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
         .tag { font-size: 0.7rem; padding: 3px 10px; border-radius: 10px; background: #e8f0eb; color: #5a7a60; }
         .card-note { font-size: 0.85rem; color: #6a6a6a; line-height: 1.5; margin-bottom: 12px; }
@@ -145,9 +146,9 @@
                     <input type="text" id="cardTitle" placeholder="例：清境農場" required>
                 </div>
                 <div class="form-group">
-                    <label>分類 *</label>
+                    <label>分類（可複選）</label>
                     <div class="category-buttons" id="categoryButtons">
-                        <button type="button" class="cat-select-btn selected" data-value="景點">🌿 景點</button>
+                        <button type="button" class="cat-select-btn" data-value="景點">🌿 景點</button>
                         <button type="button" class="cat-select-btn" data-value="美食">🍜 美食</button>
                         <button type="button" class="cat-select-btn" data-value="住宿">🏠 住宿</button>
                         <button type="button" class="cat-select-btn" data-value="活動">🎪 活動</button>
@@ -157,7 +158,7 @@
                         <button type="button" class="cat-select-btn" data-value="秘境">🔮 秘境</button>
                         <button type="button" class="cat-select-btn" data-value="探店">🛍️ 探店</button>
                     </div>
-                    <input type="hidden" id="cardCategory" value="景點">
+                    <input type="hidden" id="cardCategories" value="">
                 </div>
 
                 <style>
@@ -236,7 +237,7 @@
 
         let currentUser = null;
         let cards = [];
-        let currentFilter = 'all';
+        let selectedFilters = []; // Array for multi-select
         let searchQuery = '';
 
         const loginScreen = document.getElementById('loginScreen');
@@ -305,9 +306,29 @@
 
         document.querySelectorAll('.cat-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                currentFilter = btn.dataset.cat;
+                const cat = btn.dataset.cat;
+                
+                if (cat === 'all') {
+                    // "全部" clears all filters
+                    selectedFilters = [];
+                    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                } else {
+                    // Toggle the category
+                    document.querySelector('.cat-btn[data-cat="all"]').classList.remove('active');
+                    if (selectedFilters.includes(cat)) {
+                        selectedFilters = selectedFilters.filter(f => f !== cat);
+                        btn.classList.remove('active');
+                    } else {
+                        selectedFilters.push(cat);
+                        btn.classList.add('active');
+                    }
+                    
+                    // If no filters selected, show "all" as active
+                    if (selectedFilters.length === 0) {
+                        document.querySelector('.cat-btn[data-cat="all"]').classList.add('active');
+                    }
+                }
                 renderCards();
             });
         });
@@ -317,12 +338,14 @@
             renderCards();
         });
 
-        // Category selection in form
+        // Category selection in form (multi-select)
         document.querySelectorAll('.cat-select-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('.cat-select-btn').forEach(b => b.classList.remove('selected'));
-                btn.classList.add('selected');
-                document.getElementById('cardCategory').value = btn.dataset.value;
+                // Toggle selected state
+                btn.classList.toggle('selected');
+                // Update hidden input with selected categories
+                const selected = Array.from(document.querySelectorAll('.cat-select-btn.selected')).map(b => b.dataset.value);
+                document.getElementById('cardCategories').value = selected.join(',');
             });
         });
 
@@ -330,10 +353,9 @@
             cardForm.reset();
             document.getElementById('cardId').value = '';
             document.getElementById('imagePreview').style.display = 'none';
-            // Reset category buttons
+            // Reset category buttons (none selected for new card)
             document.querySelectorAll('.cat-select-btn').forEach(b => b.classList.remove('selected'));
-            document.querySelector('.cat-select-btn').classList.add('selected');
-            document.getElementById('cardCategory').value = '景點';
+            document.getElementById('cardCategories').value = '';
             modalTitle.textContent = '新增收藏';
             modal.classList.add('show');
         });
@@ -407,11 +429,17 @@
             e.preventDefault();
             const id = document.getElementById('cardId').value;
             const title = document.getElementById('cardTitle').value;
-            const category = document.getElementById('cardCategory').value;
+            const categoriesVal = document.getElementById('cardCategories').value;
+            const categories = categoriesVal ? categoriesVal.split(',').filter(c => c) : [];
             const tags = document.getElementById('cardTags').value.split(',').map(t => t.trim()).filter(t => t);
             const note = document.getElementById('cardNote').value;
             const link = document.getElementById('cardLink').value;
             const image = document.getElementById('cardImage').value;
+
+            if (categories.length === 0) {
+                alert('請至少選擇一個分類');
+                return;
+            }
 
             try {
                 if (id) {
@@ -419,7 +447,7 @@
                     const existingCard = cards.find(c => c.id === id);
                     await updateDoc(doc(db, "cards", id), { 
                         title, 
-                        category, 
+                        categories, 
                         tags, 
                         note, 
                         link, 
@@ -432,7 +460,7 @@
                     // Add new
                     await addDoc(collection(db, "cards"), { 
                         title, 
-                        category, 
+                        categories, 
                         tags, 
                         note, 
                         link, 
@@ -459,7 +487,13 @@
                 return dateB - dateA;
             });
             
-            if (currentFilter !== 'all') filteredCards = filteredCards.filter(c => c.category === currentFilter);
+            // Filter by selected categories (show if card has ANY of the selected categories)
+            if (selectedFilters.length > 0) {
+                filteredCards = filteredCards.filter(c => {
+                    const cardCats = c.categories || (c.category ? [c.category] : []);
+                    return selectedFilters.some(f => cardCats.includes(f));
+                });
+            }
             if (searchQuery) filteredCards = filteredCards.filter(c => c.title.toLowerCase().includes(searchQuery) || (c.note && c.note.toLowerCase().includes(searchQuery)) || c.tags?.some(t => t.toLowerCase().includes(searchQuery)));
 
             document.getElementById('totalCount').textContent = filteredCards.length;
@@ -479,14 +513,19 @@
             cardsGrid.style.display = 'grid';
             emptyState.style.display = 'none';
 
-            cardsGrid.innerHTML = filteredCards.map(card => `
+            cardsGrid.innerHTML = filteredCards.map(card => {
+                // Support both old single category and new categories array
+                const cardCats = card.categories || (card.category ? [card.category] : []);
+                const catDisplay = cardCats.length > 0 ? cardCats.map(cat => `<span class="card-category">${cat}</span>`).join('') : '<span class="card-category">無分類</span>';
+                
+                return `
                 <div class="card">
                     ${card.image ? `<img class="card-image" src="${card.image}" alt="${card.title}" onerror="this.style.display='none'">` : ''}
                     <div class="card-body">
                         <div class="card-header">
                             <div class="card-title">${card.title}</div>
-                            <div class="card-category">${card.category}</div>
                         </div>
+                        <div class="card-categories" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">${catDisplay}</div>
                         ${card.tags?.length ? `<div class="card-tags">${card.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}</div>` : ''}
                         ${card.note ? `<div class="card-note">${card.note}</div>` : ''}
                         ${card.link ? `<a href="${card.link}" target="_blank" class="card-link">🔗 查看來源</a>` : ''}
@@ -496,7 +535,7 @@
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         window.editCard = function(id) {
@@ -504,10 +543,14 @@
             if (!card) return;
             document.getElementById('cardId').value = card.id;
             document.getElementById('cardTitle').value = card.title;
-            document.getElementById('cardCategory').value = card.category;
+            
+            // Support both old single category and new categories array
+            const cardCats = card.categories || (card.category ? [card.category] : []);
+            document.getElementById('cardCategories').value = cardCats.join(',');
+            
             // Update category buttons
             document.querySelectorAll('.cat-select-btn').forEach(b => {
-                b.classList.toggle('selected', b.dataset.value === card.category);
+                b.classList.toggle('selected', cardCats.includes(b.dataset.value));
             });
             document.getElementById('cardTags').value = card.tags?.join(', ') || '';
             document.getElementById('cardNote').value = card.note || '';
