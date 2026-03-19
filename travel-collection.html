@@ -455,7 +455,6 @@
                         createdAt: existingCard?.createdAt || new Date().toISOString(),
                         updatedAt: new Date().toISOString() 
                     });
-                    alert('更新成功！');
                 } else {
                     // Add new
                     await addDoc(collection(db, "cards"), { 
@@ -468,7 +467,6 @@
                         createdAt: new Date().toISOString(), 
                         updatedAt: new Date().toISOString() 
                     });
-                    alert('新增成功！');
                 }
                 modal.classList.remove('show');
             } catch (error) {
