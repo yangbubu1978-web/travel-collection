@@ -45,6 +45,9 @@
         .card-note { font-size: 0.85rem; color: #6a6a6a; line-height: 1.5; margin-bottom: 12px; }
         .card-link { display: inline-block; font-size: 0.8rem; color: #8ba893; text-decoration: none; }
         .card-link:hover { text-decoration: underline; }
+        .card-address { font-size: 0.85rem; color: #6b8e7a; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+        .card-address a { color: #6b8e7a; text-decoration: none; }
+        .card-address a:hover { text-decoration: underline; }
         .card-actions { display: flex; gap: 10px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #f0f0f0; }
         .card-action-btn { padding: 6px 15px; border: none; border-radius: 15px; font-size: 0.75rem; cursor: pointer; transition: opacity 0.3s; }
         .card-action-btn.edit { background: #f5f2eb; color: #6a6a6a; }
@@ -190,6 +193,10 @@
                 <div class="form-group">
                     <label>Tags（用逗號分隔）</label>
                     <input type="text" id="cardTags" placeholder="例：自然,拍照,療癒">
+                </div>
+                <div class="form-group">
+                    <label>地址（點擊可開啟 Google Maps）</label>
+                    <input type="text" id="cardAddress" placeholder="例：台北市信義區市府路1號">
                 </div>
                 <div class="form-group">
                     <label>筆記 / 備註</label>
@@ -434,6 +441,7 @@
             const categoriesVal = document.getElementById('cardCategories').value;
             const categories = categoriesVal ? categoriesVal.split(',').filter(c => c) : [];
             const tags = document.getElementById('cardTags').value.split(',').map(t => t.trim()).filter(t => t);
+            const address = document.getElementById('cardAddress').value.trim();
             const note = document.getElementById('cardNote').value;
             const link = document.getElementById('cardLink').value;
             const image = document.getElementById('cardImage').value;
@@ -451,6 +459,7 @@
                         title, 
                         categories, 
                         tags, 
+                        address,
                         note, 
                         link, 
                         image, 
@@ -463,6 +472,7 @@
                         title, 
                         categories, 
                         tags, 
+                        address,
                         note, 
                         link, 
                         image, 
@@ -494,7 +504,7 @@
                     return selectedFilters.some(f => cardCats.includes(f));
                 });
             }
-            if (searchQuery) filteredCards = filteredCards.filter(c => c.title.toLowerCase().includes(searchQuery) || (c.note && c.note.toLowerCase().includes(searchQuery)) || c.tags?.some(t => t.toLowerCase().includes(searchQuery)));
+            if (searchQuery) filteredCards = filteredCards.filter(c => c.title.toLowerCase().includes(searchQuery) || (c.note && c.note.toLowerCase().includes(searchQuery)) || c.tags?.some(t => t.toLowerCase().includes(searchQuery)) || (c.address && c.address.toLowerCase().includes(searchQuery)));
 
             document.getElementById('totalCount').textContent = filteredCards.length;
 
@@ -527,6 +537,7 @@
                         </div>
                         <div class="card-categories" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">${catDisplay}</div>
                         ${card.tags?.length ? `<div class="card-tags">${card.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}</div>` : ''}
+                        ${card.address ? `<div class="card-address">📍 <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(card.address)}" target="_blank">${card.address}</a></div>` : ''}
                         ${card.note ? `<div class="card-note">${card.note}</div>` : ''}
                         ${card.link ? `<a href="${card.link}" target="_blank" class="card-link">🔗 查看來源</a>` : ''}
                         <div class="card-actions">
@@ -553,6 +564,7 @@
                 b.classList.toggle('selected', cardCats.includes(b.dataset.value));
             });
             document.getElementById('cardTags').value = card.tags?.join(', ') || '';
+            document.getElementById('cardAddress').value = card.address || '';
             document.getElementById('cardNote').value = card.note || '';
             document.getElementById('cardLink').value = card.link || '';
             document.getElementById('cardImage').value = card.image || '';
