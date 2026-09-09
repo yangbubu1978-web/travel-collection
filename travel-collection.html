@@ -560,6 +560,16 @@
             }
         });
 
+        // Escape user-controlled text before inserting into innerHTML (prevents stored XSS)
+        function escapeHtml(str) {
+            return String(str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function renderCards() {
             let filteredCards = [...cards];
             
@@ -599,23 +609,23 @@
             cardsGrid.innerHTML = filteredCards.map(card => {
                 // Support both old single category and new categories array
                 const cardCats = card.categories || (card.category ? [card.category] : []);
-                const catDisplay = cardCats.length > 0 ? cardCats.map(cat => `<span class="card-category">${cat}</span>`).join('') : '<span class="card-category">無分類</span>';
+                const catDisplay = cardCats.length > 0 ? cardCats.map(cat => `<span class="card-category">${escapeHtml(cat)}</span>`).join('') : '<span class="card-category">無分類</span>';
                 
                 return `
                 <div class="card">
-                    ${card.image ? `<img class="card-image" src="${card.image}" alt="${card.title}" onerror="this.style.display='none'">` : ''}
+                    ${card.image ? `<img class="card-image" src="${escapeHtml(card.image)}" alt="${escapeHtml(card.title)}" onerror="this.style.display='none'">` : ''}
                     <div class="card-body">
                         <div class="card-header">
-                            <div class="card-title">${card.title}</div>
+                            <div class="card-title">${escapeHtml(card.title)}</div>
                         </div>
                         <div class="card-categories" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">${catDisplay}</div>
-                        ${card.tags?.length ? `<div class="card-tags">${card.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}</div>` : ''}
-                        ${card.address ? `<div class="card-address">📍 <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(card.address)}" target="_blank">${card.address}</a></div>` : ''}
-                        ${card.hours ? `<div class="card-hours">🕐 ${card.hours}</div>` : ''}
-                        ${card.note ? `<div class="card-note">${card.note}</div>` : ''}
-                        ${card.link ? `<a href="${card.link}" target="_blank" class="card-link">🔗 查看來源</a>` : ''}
+                        ${card.tags?.length ? `<div class="card-tags">${card.tags.map(tag => `<span class="tag">#${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+                        ${card.address ? `<div class="card-address">📍 <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(card.address)}" target="_blank">${escapeHtml(card.address)}</a></div>` : ''}
+                        ${card.hours ? `<div class="card-hours">🕐 ${escapeHtml(card.hours)}</div>` : ''}
+                        ${card.note ? `<div class="card-note">${escapeHtml(card.note)}</div>` : ''}
+                        ${card.link ? `<a href="${escapeHtml(card.link)}" target="_blank" class="card-link">🔗 查看來源</a>` : ''}
                         <div class="card-actions">
-                            <button class="card-action-btn edit" data-id="${card.id}">編輯</button>
+                            <button class="card-action-btn edit" data-id="${card.id}" ${isOwner() ? '' : 'style="display:none"'}>編輯</button>
                             ${isOwner() ? `<button class="card-action-btn delete" data-id="${card.id}">刪除</button>` : ''}
                         </div>
                     </div>
