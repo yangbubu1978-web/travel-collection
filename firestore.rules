@@ -1,0 +1,12 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 旅圖書籤匣 — 卡片資料
+    // 權限依 ownerUid 鎖定：只能讀/改/刪「自己擁有的卡片」
+    match /cards/{cardId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.ownerUid;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerUid;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
+    }
+  }
+}

@@ -253,9 +253,9 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
-        const OWNER_EMAIL = 'yabu.san@gmail.com';
 
         let currentUser = null;
+        let currentUserUid = '';
         let cards = [];
         let selectedFilters = []; // Array for multi-select
         let searchQuery = '';
@@ -279,8 +279,13 @@
         const cancelBtn = document.getElementById('cancelBtn');
         const modalTitle = document.getElementById('modalTitle');
 
-        function isOwner() {
-            return currentUser && currentUser.email === OWNER_EMAIL;
+        function escapeHtml(str) {
+            return String(str ?? '')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function isOwnerCard(card) {
+            return currentUser && card && card.ownerUid && card.ownerUid === currentUser.uid;
         }
 
         loginBtn.addEventListener('click', async () => {
@@ -298,6 +303,7 @@
 
         onAuthStateChanged(auth, (user) => {
             currentUser = user;
+            currentUserUid = user ? user.uid : '';
             if (user) {
                 loginScreen.classList.remove('show');
                 mainContent.style.display = 'block';
@@ -312,9 +318,22 @@
             }
         });
 
+        async function migrateLegacyOwner() {
+            // 遷移舊資料：補上 ownerUid（鎖 rules 前必須先跑一次，否則舊卡讀不到）
+            const legacy = cards.filter(c => !c.ownerUid);
+            if (!legacy.length || !currentUser) return;
+            // 僅歷史 owner（原擁有者 email）可認領無 ownerUid 的卡片，避免抓走他人資料
+            if (currentUser.email !== 'yabu.san@gmail.com') return;
+            for (const c of legacy) {
+                try { await updateDoc(doc(db, "cards", c.id), { ownerUid: currentUser.uid }); }
+                catch (e) { console.warn('migrate ownerUid 失敗', c.id, e); }
+            }
+        }
+
         function initFirestore() {
             onSnapshot(collection(db, "cards"), (snapshot) => {
                 cards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                migrateLegacyOwner();
                 renderCards();
                 syncStatus.textContent = '✓ 已同步';
                 syncStatus.classList.add('synced');
@@ -535,6 +554,7 @@
                         note, 
                         link, 
                         image, 
+                        ownerUid: existingCard?.ownerUid || currentUser.uid,
                         createdAt: existingCard?.createdAt || new Date().toISOString(),
                         updatedAt: new Date().toISOString() 
                     });
@@ -549,6 +569,7 @@
                         note, 
                         link, 
                         image, 
+                        ownerUid: currentUser.uid,
                         createdAt: new Date().toISOString(), 
                         updatedAt: new Date().toISOString() 
                     });
@@ -559,16 +580,6 @@
                 alert('儲存失敗: ' + error.message);
             }
         });
-
-        // Escape user-controlled text before inserting into innerHTML (prevents stored XSS)
-        function escapeHtml(str) {
-            return String(str ?? '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
 
         function renderCards() {
             let filteredCards = [...cards];
@@ -625,8 +636,8 @@
                         ${card.note ? `<div class="card-note">${escapeHtml(card.note)}</div>` : ''}
                         ${card.link ? `<a href="${escapeHtml(card.link)}" target="_blank" class="card-link">🔗 查看來源</a>` : ''}
                         <div class="card-actions">
-                            <button class="card-action-btn edit" data-id="${card.id}" ${isOwner() ? '' : 'style="display:none"'}>編輯</button>
-                            ${isOwner() ? `<button class="card-action-btn delete" data-id="${card.id}">刪除</button>` : ''}
+                            <button class="card-action-btn edit" data-id="${card.id}" ${isOwnerCard(card) ? '' : 'style="display:none"'}>編輯</button>
+                            ${isOwnerCard(card) ? `<button class="card-action-btn delete" data-id="${card.id}">刪除</button>` : ''}
                         </div>
                     </div>
                 </div>
