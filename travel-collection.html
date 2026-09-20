@@ -375,9 +375,16 @@ header h1{
     radial-gradient(140% 70% at 50% 18%, var(--bg-tint-a) 0%, rgba(255,255,255,0) 55%),
     linear-gradient(180deg,var(--bg-tint-a),var(--bg-tint-b));
   z-index:1000; justify-content:center; align-items:center; flex-direction:column;
-  text-align:center; padding:var(--sp-4);
+  text-align:center; padding:var(--sp-4) var(--sp-3);
+  /* inset:0 對應的是「版面視窗」，手機工具列出現時底部會被遮住且無法捲動；
+     改用 100dvh（動態視窗高度）讓登入頁隨工具列縮放，內容永遠滑得到。 */
+  height:100dvh;
+  padding-bottom:calc(var(--sp-4) + env(safe-area-inset-bottom, 0px));
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
 }
 .login-screen.show{ display:flex; }
+/* 登入頁唯一 flex 子元素：內容矮於視窗時置中，變高時自動貼齊頂端並可捲動 */
+.login-inner{ margin:auto; width:100%; display:flex; flex-direction:column; align-items:center; }
 .login-screen h1{ font-size:clamp(2.2rem,7vw,2.9rem); font-weight:700; letter-spacing:.1em; color:var(--text-strong); }
 .login-screen .subtitle{ margin-top:var(--sp-1); }
 .login-screen p{ color:var(--text-muted); margin-top:var(--sp-3); font-size:var(--fs-body); }
@@ -394,10 +401,16 @@ header h1{
 /* 在 Messenger／LINE／Instagram 等內建瀏覽器中，儲存空間被隔離，
    Google 登入會以「missing initial state」失敗，故在登入頁明確提示改用真正的瀏覽器。 */
 .inapp-warning{
-  display:none; max-width:44rem; margin-top:var(--sp-4);
+  display:none; box-sizing:border-box; width:100%; max-width:44rem; margin-top:var(--sp-4);
   padding:var(--sp-3) var(--sp-4); text-align:left;
   background:#FFF8E6; border:1px solid #E3C266; border-radius:var(--radius-m);
   box-shadow:var(--shadow-s);
+}
+@media (max-width:480px){
+  .login-screen{ padding:var(--sp-3) var(--sp-2); }
+  .login-screen h1{ font-size:clamp(1.8rem,8vw,2.2rem); }
+  .inapp-warning{ margin-top:var(--sp-3); padding:var(--sp-2) var(--sp-3); }
+  .inapp-warning p{ font-size:var(--fs-tiny); line-height:1.7; }
 }
 .inapp-warning.show{ display:block; }
 .inapp-warning strong{ display:block; margin-bottom:8px; color:#7A5200; font-size:var(--fs-body); }
@@ -467,20 +480,22 @@ header h1{
 <body>
     <!-- Login Screen -->
     <div class="login-screen" id="loginScreen">
-        <h1>旅圖書籤匣</h1>
-        <p class="subtitle">TRIPMARK DECK</p>
-        <p style="color: #888; margin-top: 20px;">請先登入 Google 帳號</p>
-        <button class="login-btn" id="loginBtn">使用 Google 登入</button>
-        <div class="inapp-warning" id="inAppWarning">
-            <strong>⚠️ 請改用 Safari／Chrome 開啟本頁</strong>
-            <p>
-                偵測到你正在 App 的「內建瀏覽器」開啟本頁（Messenger、LINE、Instagram、Facebook 等）。
-                這類瀏覽器會隔離網頁暫存空間，Google 登入會失敗並顯示
-                「Unable to process request due to missing initial state」。
-                <br>請點右上角選單 → 選擇「<strong style="display:inline;">在 Safari／Chrome 中開啟</strong>」，
-                或複製下方網址貼到瀏覽器再登入。
-            </p>
-            <button type="button" class="copy-url-btn" id="copyUrlBtn">複製網址</button>
+        <div class="login-inner">
+            <h1>旅圖書籤匣</h1>
+            <p class="subtitle">TRIPMARK DECK</p>
+            <p style="color: #888; margin-top: 20px;">請先登入 Google 帳號</p>
+            <button class="login-btn" id="loginBtn">使用 Google 登入</button>
+            <div class="inapp-warning" id="inAppWarning">
+                <strong>⚠️ 請改用 Safari／Chrome 開啟本頁</strong>
+                <p>
+                    偵測到你正在 App 的「內建瀏覽器」開啟（Messenger、LINE、Instagram、Facebook 等）。
+                    這類瀏覽器會隔離網頁暫存空間，Google 登入會失敗並顯示
+                    「missing initial state」錯誤。
+                    <br>請點右上角選單 → 選擇「在 Safari／Chrome 中開啟」，
+                    或複製下方網址貼到瀏覽器再登入。
+                </p>
+                <button type="button" class="copy-url-btn" id="copyUrlBtn">複製網址</button>
+            </div>
         </div>
     </div>
 
