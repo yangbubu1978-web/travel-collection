@@ -390,6 +390,26 @@ header h1{
 .login-btn:hover{ transform:translateY(-2px); box-shadow:var(--shadow-l); background:var(--primary-deep); }
 .login-btn:active{ transform:scale(.97); }
 
+/* ---------- App 內建瀏覽器警告（2026-09-20 新增） ---------- */
+/* 在 Messenger／LINE／Instagram 等內建瀏覽器中，儲存空間被隔離，
+   Google 登入會以「missing initial state」失敗，故在登入頁明確提示改用真正的瀏覽器。 */
+.inapp-warning{
+  display:none; max-width:44rem; margin-top:var(--sp-4);
+  padding:var(--sp-3) var(--sp-4); text-align:left;
+  background:#FFF8E6; border:1px solid #E3C266; border-radius:var(--radius-m);
+  box-shadow:var(--shadow-s);
+}
+.inapp-warning.show{ display:block; }
+.inapp-warning strong{ display:block; margin-bottom:8px; color:#7A5200; font-size:var(--fs-body); }
+.inapp-warning p{ margin:0 0 12px; color:#6B4C00; font-size:var(--fs-small); line-height:1.75; }
+.inapp-warning .copy-url-btn{
+  padding:10px 20px; background:var(--primary); color:var(--on-primary);
+  border:none; border-radius:var(--radius-pill); cursor:pointer;
+  font-family:var(--font-body); font-size:var(--fs-small); font-weight:600;
+  transition:background var(--dur) var(--ease);
+}
+.inapp-warning .copy-url-btn:hover{ background:var(--primary-deep); }
+
 /* ---------- 可近性：清楚的鍵盤 focus 標示（達 3:1）---------- */
 :focus-visible{
   outline:2px solid var(--primary);
@@ -451,6 +471,17 @@ header h1{
         <p class="subtitle">TRIPMARK DECK</p>
         <p style="color: #888; margin-top: 20px;">請先登入 Google 帳號</p>
         <button class="login-btn" id="loginBtn">使用 Google 登入</button>
+        <div class="inapp-warning" id="inAppWarning">
+            <strong>⚠️ 請改用 Safari／Chrome 開啟本頁</strong>
+            <p>
+                偵測到你正在 App 的「內建瀏覽器」開啟本頁（Messenger、LINE、Instagram、Facebook 等）。
+                這類瀏覽器會隔離網頁暫存空間，Google 登入會失敗並顯示
+                「Unable to process request due to missing initial state」。
+                <br>請點右上角選單 → 選擇「<strong style="display:inline;">在 Safari／Chrome 中開啟</strong>」，
+                或複製下方網址貼到瀏覽器再登入。
+            </p>
+            <button type="button" class="copy-url-btn" id="copyUrlBtn">複製網址</button>
+        </div>
     </div>
 
     <div class="container" id="mainContent" style="display: none;">
@@ -572,7 +603,7 @@ header h1{
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCHEVUsY-Q9A4SM8EBodKFbJvZaBNTIgEo",
@@ -623,13 +654,60 @@ header h1{
             return currentUser && ALLOWED_EDITORS.includes(currentUser.email);
         }
 
+        // ---------- 登入環境偵測（2026-09-20）----------
+        // App 內建瀏覽器（Messenger／LINE／IG…）會隔離網頁儲存空間，
+        // 導致 Google 登入以「missing initial state」失敗；先明確提示改用真正的瀏覽器。
+        const UA = navigator.userAgent || '';
+        const IS_IN_APP_BROWSER = /FBAN|FBAV|FB_IAB|Messenger|Instagram|Line\/|MicroMessenger|Twitter|TikTok|Snapchat|Pinterest|WeChat/i.test(UA);
+        const IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(UA);
+        const inAppWarning = document.getElementById('inAppWarning');
+        const copyUrlBtn = document.getElementById('copyUrlBtn');
+
+        if (IS_IN_APP_BROWSER && inAppWarning) {
+            inAppWarning.classList.add('show');
+        }
+
+        if (copyUrlBtn) {
+            copyUrlBtn.addEventListener('click', async () => {
+                const url = location.origin + location.pathname;
+                try {
+                    await navigator.clipboard.writeText(url);
+                    copyUrlBtn.textContent = '✓ 已複製，請貼到 Safari／Chrome';
+                } catch (e) {
+                    window.prompt('請手動複製這個網址：', url);
+                }
+            });
+        }
+
         loginBtn.addEventListener('click', async () => {
+            if (IS_IN_APP_BROWSER) {
+                const go = confirm('目前是 App 的內建瀏覽器，Google 登入會失敗。\n建議改用 Safari／Chrome 開啟本頁。\n仍要嘗試登入嗎？');
+                if (!go) return;
+            }
             try {
-                await signInWithPopup(auth, provider);
+                // 手機瀏覽器常擋彈出視窗 → 採 Firebase 官方建議的轉頁登入
+                if (IS_MOBILE) {
+                    await signInWithRedirect(auth, provider);
+                } else {
+                    await signInWithPopup(auth, provider);
+                }
             } catch (error) {
                 console.error('Login error:', error);
-                alert('登入失敗，請再試一次');
+                if (error && error.code === 'auth/popup-blocked') {
+                    alert('瀏覽器擋住了登入視窗，改用轉頁登入…');
+                    try { await signInWithRedirect(auth, provider); } catch (e2) { console.error(e2); }
+                } else if (error && error.code === 'auth/unauthorized-domain') {
+                    alert('這個網址不在 Firebase 允許的登入網域中，請改用官方網址開啟。');
+                } else {
+                    alert('登入失敗（' + (error && error.code ? error.code : 'unknown') + '）\n請改用 Safari／Chrome 開啟本頁後再試一次。');
+                }
             }
+        });
+
+        // 轉頁登入回來的結果（成功時由 onAuthStateChanged 接手）
+        getRedirectResult(auth).catch((error) => {
+            console.error('Redirect login error:', error);
+            alert('登入未完成（' + (error && error.code ? error.code : 'unknown') + '）\n請改用 Safari／Chrome 開啟本頁再試一次。');
         });
 
         logoutBtn.addEventListener('click', async () => {
