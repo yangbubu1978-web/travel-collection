@@ -2,10 +2,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // 旅圖書籤匣 — 卡片資料
-    // 權限：僅「雅布大人」與「小布」兩位白名單帳號可讀寫（新增/修改/刪除/讀取）
+    // 權限：僅白名單帳號可讀寫（新增/修改/刪除/讀取）
+    // 名單：雅布大人、小布、Prosaist（2026-09-20 加入）
     match /cards/{cardId} {
       allow read, write: if request.auth != null
-        && request.auth.token.email in ['yabu.san@gmail.com', 'yang.bubu1978@gmail.com'];
+        && request.auth.token.email in ['yabu.san@gmail.com', 'yang.bubu1978@gmail.com', 'prosaist0101@gmail.com'];
     }
   }
 }
