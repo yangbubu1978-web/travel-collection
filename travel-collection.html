@@ -496,6 +496,16 @@ header h1{
                 </p>
                 <button type="button" class="copy-url-btn" id="copyUrlBtn">複製網址</button>
             </div>
+            <div class="inapp-warning" id="loginFailHint">
+                <strong>⚠️ 登入沒有完成</strong>
+                <p>
+                    剛剛的登入被瀏覽器中途攔下來了。最常見的原因是瀏覽器封鎖了
+                    「跨網站 Cookie」，導致登入狀態傳不回來。
+                    <br>請試：<b>Chrome 設定 → 隱私權與安全性 → 第三方 Cookie → 允許</b>，
+                    然後重新登入一次。
+                    <br>若還是不行，請把這個畫面截圖給小布，小布幫你查。
+                </p>
+            </div>
         </div>
     </div>
 
@@ -622,6 +632,9 @@ header h1{
 
         const firebaseConfig = {
             apiKey: "AIzaSyCHEVUsY-Q9A4SM8EBodKFbJvZaBNTIgEo",
+            // 保留 firebaseapp.com 這個值：它是 Google OAuth 唯一認可的登入處理頁
+            // （改成 web.app 會被 Google 以 redirect_uri_mismatch 拒絕，2026-09-20 實測）
+            // 同源解法改成讓 App 也跑在 firebaseapp.com 上，見 README。
             authDomain: "travel-collection-34302.firebaseapp.com",
             projectId: "travel-collection-34302",
             storageBucket: "travel-collection-34302.firebasestorage.app",
@@ -694,12 +707,17 @@ header h1{
             });
         }
 
+        // 記錄「剛剛有按過登入」：若跳去 Google 又回到本頁卻仍未登入，
+        // 代表登入狀態被瀏覽器攔掉了（跨網站 Cookie 被封鎖等），顯示提示。
+        const LOGIN_PENDING_KEY = 'tc_login_pending';
+
         loginBtn.addEventListener('click', async () => {
             if (IS_IN_APP_BROWSER) {
                 const go = confirm('目前是 App 的內建瀏覽器，Google 登入會失敗。\n建議改用 Safari／Chrome 開啟本頁。\n仍要嘗試登入嗎？');
                 if (!go) return;
             }
             try {
+                sessionStorage.setItem(LOGIN_PENDING_KEY, String(Date.now()));
                 // 手機瀏覽器常擋彈出視窗 → 採 Firebase 官方建議的轉頁登入
                 if (IS_MOBILE) {
                     await signInWithRedirect(auth, provider);
@@ -726,13 +744,20 @@ header h1{
         });
 
         logoutBtn.addEventListener('click', async () => {
+            sessionStorage.removeItem(LOGIN_PENDING_KEY);
             await signOut(auth);
         });
 
+        let authStateSeen = false;
+
         onAuthStateChanged(auth, (user) => {
+            authStateSeen = true;
             currentUser = user;
             currentUserUid = user ? user.uid : '';
             if (user) {
+                sessionStorage.removeItem(LOGIN_PENDING_KEY);
+                const hint = document.getElementById('loginFailHint');
+                if (hint) hint.classList.remove('show');
                 loginScreen.classList.remove('show');
                 mainContent.style.display = 'block';
                 userInfo.classList.add('show');
@@ -745,6 +770,16 @@ header h1{
                 userInfo.classList.remove('show');
             }
         });
+
+        // 回到本頁卻仍未登入 + 10 分鐘內按過登入 → 顯示「登入沒有完成」提示
+        setTimeout(() => {
+            const pendingAt = Number(sessionStorage.getItem(LOGIN_PENDING_KEY) || 0);
+            const recent = pendingAt > 0 && (Date.now() - pendingAt) < 10 * 60 * 1000;
+            const hint = document.getElementById('loginFailHint');
+            if (!currentUser && recent && authStateSeen && hint) {
+                hint.classList.add('show');
+            }
+        }, 4000);
 
         function initFirestore() {
             onSnapshot(collection(db, "cards"), (snapshot) => {
