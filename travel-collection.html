@@ -3,6 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 舊門牌自動導向（2026-09-23）
+         github.io 上「手機」無法完成 Google 登入：手機一定要走轉頁登入，
+         而轉頁過程要跨 github.io ↔ firebaseapp.com 兩個網域，
+         手機瀏覽器會隔離跨網域的儲存空間，登入結果傳不回來（畫面停在「登入沒有完成」）。
+         firebaseapp.com 與登入處理頁同源，故一律導向該網址。
+         （桌面用彈出視窗登入不受影響，但統一入口較不會混淆。）
+         註：本檔同時部署到 GitHub Pages 與 Firebase Hosting，
+         此判斷式在 firebaseapp.com 上不成立，不會造成迴圈。 -->
+    <script>
+        (function () {
+            var host = location.hostname;
+            if (host === 'yangbubu1978-web.github.io' || /\.github\.io$/.test(host)) {
+                location.replace('https://travel-collection-34302.firebaseapp.com/');
+            }
+        })();
+    </script>
     <title>旅圖書籤匣 🏷️ - 我的旅行地圖</title>
     <style>
 :root{
