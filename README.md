@@ -2,13 +2,15 @@
 
 ## 權限模型（現行）
 
-僅 **白名單帳號** 可讀寫（新增 / 修改 / 刪除 / 讀取）全部卡片：
+- **讀取**：**任何人皆可**（訪客免登入即可瀏覽，2026-09-23 起）
+- **寫入**：僅白名單帳號（新增 / 修改 / 刪除）
+  - 雅布大人：`yabu.san@gmail.com`
+  - 小布：`yang.bubu1978@gmail.com`
+  - Prosaist：`prosaist0101@gmail.com`（2026-09-20 加入）
 
-- 雅布大人：`yabu.san@gmail.com`
-- 小布：`yang.bubu1978@gmail.com`
-- Prosaist：`prosaist0101@gmail.com`（2026-09-20 加入）
+判斷邏輯放在 **Firestore Security Rules**（`firestore.rules`），前端只負責依 `isEditor()` 秀出編輯 / 刪除鈕（不作真正防護）。
 
-其他登入者無法讀寫。判斷邏輯放在 **Firestore Security Rules**（`firestore.rules`），前端只負責依 `isEditor()` 秀出編輯 / 刪除鈕（不作真正防護）。
+> ⚠️ 開放讀取代表**任何知道專案 ID 的人都能用 Firestore API 讀走全部卡片**（不只是「知道網址的人」）——專案 ID 就寫在網頁原始碼裡。這是刻意的取捨：換來手機訪客完全免登入、不受跨網站 Cookie 限制。若日後要收回，把 `allow read` 改回 `if request.auth != null && request.auth.token.email in [...]` 即可。
 
 > ⚠️ 新增帳號要改 **兩個地方**：`firestore.rules` 的 `request.auth.token.email in [...]`（伺服器端真正的門）＋ `travel-collection.html` 的 `ALLOWED_EDITORS`（前端秀按鈕）。只改一邊會出現「能登入但看不到按鈕」或「看得到按鈕但存不進去」。
 > email 一律寫小寫（Google 帳號的 token email 為小寫，Gmail 本身不分大小寫）。
@@ -41,6 +43,8 @@
 - 因此「同源登入」的做法是**把 App 也放到 firebaseapp.com 上**（Firebase Hosting 同時服務 `.web.app` 與 `.firebaseapp.com`），而不是改 authDomain。
 - 📱 **手機／內建瀏覽器請用 `https://travel-collection-34302.firebaseapp.com/`**：網頁與登入處理頁同一個網域，不會被「跨網站 Cookie 封鎖／儲存空間隔離」擋掉。
 - 桌機用 GitHub Pages 或上面任一網址都正常。
+- 🆕 **2026-09-23 起訪客不需要登入**：`read` 已開放，單純瀏覽不會碰到同源限制。只有要編輯時才需要登入。
+- `github.io` 網址會自動轉到 `firebaseapp.com`；加 `?stay=1` 可留在 GitHub 版（測試用）。
 
 ## 🆘 登入失敗的兩種情境（前端已內建提示）
 
