@@ -1051,11 +1051,21 @@ header h1{
             let filteredCards = [...cards];
             
             // Sort by createdAt (newest first)
-            filteredCards.sort((a, b) => {
-                const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-                return dateB - dateA;
-            });
+            // 2026-09-23 修正：舊寫法 new Date(某卡片.createdAt) 遇到「Firestore Timestamp 物件」
+            // 會得到 Invalid Date（NaN）；比較函式一旦回 NaN，整個排序就會失效，
+            // 導致新加的卡片不會排在最上面（實例：新卡片被排到第 114 位）。
+            // 這裡統一解析 Timestamp／Date／ISO 字串／毫秒數字，無法解析者視為 0（沉到最後）。
+            const toMs = (v) => {
+                if (v === null || v === undefined || v === '') return 0;
+                if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+                if (typeof v.toMillis === 'function') {           // Firestore Timestamp
+                    try { return v.toMillis(); } catch (e) { return 0; }
+                }
+                if (v instanceof Date) return Number.isFinite(v.getTime()) ? v.getTime() : 0;
+                const t = new Date(v).getTime();
+                return Number.isFinite(t) ? t : 0;
+            };
+            filteredCards.sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt));
             
             // Filter by selected categories (show if card has ANY of the selected categories)
             if (selectedFilters.length > 0) {
