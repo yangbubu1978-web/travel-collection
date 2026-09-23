@@ -505,10 +505,10 @@ header h1{
 </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700;800&display=swap" rel="stylesheet">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@600;700;800&display=swap" rel="stylesheet">
+    <!-- 2026-09-24 效能修正：原本這裡有兩個 Google Fonts link，兩者都載入 Noto Serif TC，
+         等於重複下載一份 102KB 的 CSS。合併成一個，並只留實際用到的字重：
+         Sans TC 400/500/600/700（內文）、Serif TC 700（標題；600 與 800 沒有任何元素使用）。 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
     <!-- Login Screen -->
