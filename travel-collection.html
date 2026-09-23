@@ -14,7 +14,11 @@
     <script>
         (function () {
             var host = location.hostname;
-            if (host === 'yangbubu1978-web.github.io' || /\.github\.io$/.test(host)) {
+            // ?stay=1 = 測試模式：這次留在 GitHub 版，不跳走。
+            // 用途：確認「手機在 github.io 上到底能不能登入」（手機的儲存空間隔離政策只有真手機能驗）。
+            // 不帶這個參數時行為完全不變，手機照樣被帶到能登入的網址。
+            var stayMode = /[?&]stay=1/.test(location.search);
+            if (!stayMode && (host === 'yangbubu1978-web.github.io' || /\.github\.io$/.test(host))) {
                 location.replace('https://travel-collection-34302.firebaseapp.com/');
             }
         })();
@@ -720,6 +724,16 @@ header h1{
             inAppWarning.classList.add('show');
         }
 
+        // ?stay=1 測試模式（2026-09-23）：留在 GitHub 版，登入改走彈出視窗，
+        // 用來驗證手機能不能不用 firebaseapp.com 就登入成功。
+        const STAY_MODE = /[?&]stay=1/.test(location.search);
+        if (STAY_MODE) {
+            const banner = document.createElement('div');
+            banner.textContent = '🧪 測試模式（?stay=1）：本頁留在 GitHub 版，登入改走彈出視窗';
+            banner.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#3C5364;color:#F7F2E7;font-size:13px;line-height:1.6;text-align:center;padding:6px 10px;';
+            document.body.appendChild(banner);
+        }
+
         if (copyUrlBtn) {
             copyUrlBtn.addEventListener('click', async () => {
                 const url = location.origin + location.pathname;
@@ -744,7 +758,9 @@ header h1{
             try {
                 sessionStorage.setItem(LOGIN_PENDING_KEY, String(Date.now()));
                 // 手機瀏覽器常擋彈出視窗 → 採 Firebase 官方建議的轉頁登入
-                if (IS_MOBILE) {
+                // 例外：STAY_MODE（?stay=1）時留在 github.io，只能靠彈出視窗
+                // （轉頁登入在跨網域下必敗：現代瀏覽器阻擋跨網域 iframe 讀儲存空間）
+                if (IS_MOBILE && !STAY_MODE) {
                     await signInWithRedirect(auth, provider);
                 } else {
                     await signInWithPopup(auth, provider);
