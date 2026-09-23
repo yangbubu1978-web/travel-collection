@@ -84,7 +84,7 @@
 
   /* ---- 字體（標題=明朝/宋體襯線；內文=乾淨 Sans）---- */
   --font-display:"Noto Serif TC","Songti TC","PMingLiU",serif;
-  --font-body:"Noto Sans TC","PingFang TC","Helvetica Neue",sans-serif;
+  --font-body: "PingFang TC","Microsoft JhengHei","Noto Sans TC","Heiti TC","Helvetica Neue",sans-serif;
 
   /* ---- 字階（模數階層）---- */
   --fs-h1:clamp(2rem, 4.5vw, 2.4rem);
@@ -507,8 +507,11 @@ header h1{
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- 2026-09-24 效能修正：原本這裡有兩個 Google Fonts link，兩者都載入 Noto Serif TC，
          等於重複下載一份 102KB 的 CSS。合併成一個，並只留實際用到的字重：
-         Sans TC 400/500/600/700（內文）、Serif TC 700（標題；600 與 800 沒有任何元素使用）。 -->
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@700&display=swap" rel="stylesheet">
+         Sans TC 400/500/600/700（內文）、Serif TC 700（標題；600 與 800 沒有任何元素使用）。
+         2026-09-24 第二階段：內文改用系統字型（PingFang TC／微軟正黑），
+         不再下載 Noto Sans TC —— 實測省下 2.5MB，LCP 不再被字型阻塞。
+         標題的明朝體（Noto Serif TC 700）保留，維持原本的日系視覺。 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
     <!-- Login Screen -->
