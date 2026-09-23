@@ -238,6 +238,11 @@ header h1{
 
 /* ---------- 載入 ---------- */
 .loading{ text-align:center; padding:var(--sp-3); color:var(--text-muted); font-size:var(--fs-lead); }
+/* 讀取狀態診斷區（2026-09-23）：手機沒有開發者工具，唯一能看到真相的地方就是畫面本身 */
+.sync-diag{ text-align:center; margin:12px auto 0; padding:12px 16px; max-width:520px;
+  background:var(--surface-subtle); border:1px solid var(--border, #DED7C8); border-radius:12px;
+  color:var(--text-muted); font-size:13px; line-height:1.9; word-break:break-word; }
+.sync-diag b{ color:var(--text-strong); font-weight:600; }
 
 /* ---------- 卡片網格 ---------- */
 .cards-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:var(--sp-3); }
@@ -566,6 +571,8 @@ header h1{
         </div>
 
         <div class="loading" id="loading">🔄 載入資料中...</div>
+        <div class="sync-diag" id="syncDiag" style="display:none;"></div>
+        <button class="backup-btn" id="retryBtn" type="button" style="display:none;">🔄 重新連線</button>
         <div class="cards-grid" id="cardsGrid" style="display: none;"></div>
         <div class="empty-state" id="emptyState" style="display: none;">
             <div class="empty-icon">📍</div>
@@ -682,6 +689,8 @@ header h1{
         const cardsGrid = document.getElementById('cardsGrid');
         const emptyState = document.getElementById('emptyState');
         const loading = document.getElementById('loading');
+        const syncDiag = document.getElementById('syncDiag');
+        const retryBtn = document.getElementById('retryBtn');
         const searchInput = document.getElementById('searchInput');
         const addBtn = document.getElementById('addBtn');
         const exportJsonBtn = document.getElementById('exportJsonBtn');
@@ -797,16 +806,95 @@ header h1{
             }
         }, 4000);
 
-        function initFirestore() {
-            onSnapshot(collection(db, "cards"), (snapshot) => {
+        // ---------- 讀取狀態（2026-09-23 重寫）----------
+        // 為什麼要改：手機第一次連線時，Firestore 可能先吐一個「本地快取」的空快照，
+        // 舊版程式不管三七二十一就寫「✓ 已同步」，使用者看到「已同步、0 筆」，
+        // 會以為資料被清空了。現在改成：只有「伺服器確認」的資料才亮綠燈，
+        // 連線中一律顯示載入中，並在畫面上寫出診斷資訊（手機沒有開發者工具）。
+        let serverSynced = false;      // 是否收過「伺服器確認」的快照
+        let lastFromCache = null;      // 最近一次快照是否來自本地快取
+        let lastErrorCode = '';        // 最近一次同步錯誤代碼
+        let lastServerCount = null;    // 最近一次伺服器確認的筆數
+        let listenerStartedAt = 0;
+        let unsubscribeCards = null;
+        let diagTimer = null;
+
+        function renderSyncDiag() {
+            if (!syncDiag) return;
+            const waited = listenerStartedAt ? Math.round((Date.now() - listenerStartedAt) / 1000) : 0;
+            let stateText;
+            if (lastErrorCode) {
+                stateText = '同步失敗（' + escapeHtml(lastErrorCode) + '）';
+            } else if (serverSynced) {
+                stateText = '已連上伺服器';
+            } else {
+                stateText = '還在等伺服器回應…';
+            }
+            syncDiag.innerHTML = [
+                '<b>狀態</b>：' + stateText,
+                '<b>畫面筆數</b>：' + cards.length + (lastServerCount === null ? '' : '（伺服器確認 ' + lastServerCount + ' 筆）'),
+                '<b>本地快取</b>：' + (lastFromCache === null ? '尚未收到快照' : (lastFromCache ? '是（畫面這份不是伺服器來的）' : '否')),
+                '<b>網路</b>：' + (navigator.onLine ? '連線中' : '離線'),
+                '<b>已等待</b>：' + waited + ' 秒'
+            ].join('<br>');
+            syncDiag.style.display = (serverSynced && !lastErrorCode) ? 'none' : 'block';
+            // 超過 20 秒還沒拿到伺服器資料 → 給使用者一條路走，不要讓他只能重新整理
+            if (retryBtn) retryBtn.style.display = (!serverSynced && waited > 20) ? 'block' : 'none';
+        }
+
+        function startCardsListener() {
+            if (unsubscribeCards) { try { unsubscribeCards(); } catch (e) {} unsubscribeCards = null; }
+            serverSynced = false;
+            lastFromCache = null;
+            lastErrorCode = '';
+            listenerStartedAt = Date.now();
+            syncStatus.textContent = '🔄 載入中...';
+            syncStatus.classList.remove('synced');
+            if (loading) {
+                loading.style.display = 'block';
+                loading.textContent = '🔄 載入資料中…（第一次連線有時要等 10～30 秒）';
+            }
+            renderSyncDiag();
+
+            unsubscribeCards = onSnapshot(collection(db, "cards"), (snapshot) => {
                 cards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                lastFromCache = !!(snapshot.metadata && snapshot.metadata.fromCache);
+                if (lastFromCache) {
+                    // 本地快取（可能還是空的）不算連上伺服器，不要亮綠燈
+                    syncStatus.textContent = '🔄 載入中...';
+                    syncStatus.classList.remove('synced');
+                    if (loading) loading.style.display = 'block';
+                } else {
+                    serverSynced = true;
+                    lastServerCount = cards.length;
+                    syncStatus.textContent = '✓ 已同步';
+                    syncStatus.classList.add('synced');
+                    if (loading) loading.style.display = 'none';
+                }
                 renderCards();
-                syncStatus.textContent = '✓ 已同步';
-                syncStatus.classList.add('synced');
-                loading.style.display = 'none';
+                renderSyncDiag();
             }, (error) => {
                 console.error("Error:", error);
+                lastErrorCode = (error && error.code) ? String(error.code) : '未知錯誤';
                 syncStatus.textContent = '⚠️ 同步失敗';
+                syncStatus.classList.remove('synced');
+                if (loading) loading.style.display = 'none';
+                renderCards();
+                renderSyncDiag();
+            });
+        }
+
+        function initFirestore() {
+            startCardsListener();
+            if (diagTimer) clearInterval(diagTimer);
+            diagTimer = setInterval(renderSyncDiag, 1000);
+        }
+
+        if (retryBtn) {
+            retryBtn.addEventListener('click', () => {
+                retryBtn.textContent = '🔄 重新連線中…';
+                startCardsListener();
+                setTimeout(() => { retryBtn.textContent = '🔄 重新連線'; }, 3000);
             });
         }
 
@@ -1080,7 +1168,16 @@ header h1{
 
             if (cards.length === 0) {
                 cardsGrid.style.display = 'none';
-                emptyState.style.display = 'none';
+                // 只有「伺服器確認過」才能說「還沒有收藏」；
+                // 還在連線時不要讓畫面看起來像資料被清空。
+                const sureEmpty = serverSynced && !lastErrorCode;
+                emptyState.style.display = sureEmpty ? 'block' : 'none';
+                if (loading) {
+                    loading.style.display = sureEmpty ? 'none' : 'block';
+                    if (!serverSynced && !lastErrorCode) {
+                        loading.textContent = '🔄 正在連線資料庫…第一次連線可能要 10～30 秒，下方會顯示目前狀態';
+                    }
+                }
                 return;
             }
 
