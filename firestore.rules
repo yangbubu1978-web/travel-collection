@@ -2,11 +2,22 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // 旅圖書籤匣 — 卡片資料
-    // 權限：僅白名單帳號可讀寫（新增/修改/刪除/讀取）
-    // 名單：雅布大人、小布、Prosaist（2026-09-20 加入）
+    //
+    // 讀取：任何人皆可（2026-09-23 起）
+    //   原因：手機瀏覽佔大宗，而登入需要「網頁與 authDomain 同源」，
+    //   訪客若要登入就得處理跨網站 Cookie 被封鎖的問題（App 內建瀏覽器必失敗）。
+    //   開放讀取後，訪客不需要登入即可瀏覽，同源限制直接繞過。
+    //
+    // 寫入：僅白名單帳號（新增 / 修改 / 刪除）
+    //   名單：雅布大人、小布、Prosaist
     match /cards/{cardId} {
-      allow read, write: if request.auth != null
-        && request.auth.token.email in ['yabu.san@gmail.com', 'yang.bubu1978@gmail.com', 'prosaist0101@gmail.com'];
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.token.email in [
+             'yabu.san@gmail.com',
+             'yang.bubu1978@gmail.com',
+             'prosaist0101@gmail.com'
+           ];
     }
   }
 }

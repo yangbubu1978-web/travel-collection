@@ -494,6 +494,14 @@ header h1{
   .card-body{ padding:var(--sp-2) var(--sp-2) var(--sp-1); }
   .cat-btn{ font-size:var(--fs-tiny); padding:9px 15px; }
 }
+
+    /* 訪客唯讀模式：未登入時顯示的「編輯者登入」入口 */
+    .guest-login-btn{
+      display:block; margin:var(--sp-2) auto 0;
+    }
+    .guest-login-btn:hover{
+      color:var(--text-strong); border-color:var(--primary);
+    }
 </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -510,6 +518,7 @@ header h1{
             <p class="subtitle">TRIPMARK DECK</p>
             <p style="color: #888; margin-top: 20px;">請先登入 Google 帳號</p>
             <button class="login-btn" id="loginBtn">使用 Google 登入</button>
+            <button type="button" class="logout-btn" id="skipLoginBtn" style="margin-top:var(--sp-2);">先瀏覽，不登入</button>
             <div class="inapp-warning" id="inAppWarning">
                 <strong>⚠️ 請改用 Safari／Chrome 開啟本頁</strong>
                 <p>
@@ -543,6 +552,8 @@ header h1{
                 <span id="userName"></span>
                 <button class="logout-btn" id="logoutBtn">登出</button>
             </div>
+            <!-- 訪客唯讀模式：未登入時顯示，點擊才會叫出登入畫面 -->
+            <button class="logout-btn guest-login-btn" id="guestLoginBtn" style="display:none;">編輯者登入</button>
             <p class="sync-status" id="syncStatus">🔄 載入中...</p>
         </header>
 
@@ -711,6 +722,25 @@ header h1{
             return currentUser && ALLOWED_EDITORS.includes(currentUser.email);
         }
 
+        // ========================================
+        // 訪客唯讀模式（2026-09-23）
+        // ========================================
+        // 為什麼要有：手機瀏覽佔大宗，而「登入」需要網頁與 authDomain 同源，
+        // 訪客一旦要登入就會撞上跨網站 Cookie 被封鎖（App 內建瀏覽器必失敗）。
+        // 現在 Firestore rules 開放 read，訪客不登入也能看，
+        // 登入只用來決定「能不能編輯」。
+        function updateEditUI() {
+            const editor = !!isEditor();
+            // 新增鈕（fixed 右下角，在 mainContent 之外）
+            if (addBtn) addBtn.style.display = editor ? '' : 'none';
+            // 匯出備份（屬於編輯者功能）
+            const backupActions = document.querySelector('.backup-actions');
+            if (backupActions) backupActions.style.display = editor ? '' : 'none';
+            // 訪客的「編輯者登入」入口
+            const guestLogin = document.getElementById('guestLoginBtn');
+            if (guestLogin) guestLogin.style.display = editor ? 'none' : '';
+        }
+
         // ---------- 登入環境偵測（2026-09-20）----------
         // App 內建瀏覽器（Messenger／LINE／IG…）會隔離網頁儲存空間，
         // 導致 Google 登入以「missing initial state」失敗；先明確提示改用真正的瀏覽器。
@@ -749,6 +779,21 @@ header h1{
         // 記錄「剛剛有按過登入」：若跳去 Google 又回到本頁卻仍未登入，
         // 代表登入狀態被瀏覽器攔掉了（跨網站 Cookie 被封鎖等），顯示提示。
         const LOGIN_PENDING_KEY = 'tc_login_pending';
+
+        // 訪客點「編輯者登入」→ 叫出登入畫面（預設不再自動擋住內容）
+        const guestLoginBtn = document.getElementById('guestLoginBtn');
+        if (guestLoginBtn) {
+            guestLoginBtn.addEventListener('click', () => {
+                loginScreen.classList.add('show');
+            });
+        }
+        // 登入畫面上的「先瀏覽，不登入」→ 關掉登入畫面繼續瀏覽
+        const skipLoginBtn = document.getElementById('skipLoginBtn');
+        if (skipLoginBtn) {
+            skipLoginBtn.addEventListener('click', () => {
+                loginScreen.classList.remove('show');
+            });
+        }
 
         loginBtn.addEventListener('click', async () => {
             if (IS_IN_APP_BROWSER) {
@@ -804,11 +849,16 @@ header h1{
                 userInfo.classList.add('show');
                 userAvatar.src = user.photoURL || '';
                 userName.textContent = user.displayName || user.email;
+                updateEditUI();
                 initFirestore();
             } else {
-                loginScreen.classList.add('show');
-                mainContent.style.display = 'none';
+                // 訪客模式：不擋畫面，直接以唯讀身分載入資料。
+                // 已登入者不會經過這裡（Firebase 首次回呼就會帶 user）。
+                updateEditUI();
+                loginScreen.classList.remove('show');
+                mainContent.style.display = 'block';
                 userInfo.classList.remove('show');
+                initFirestore();
             }
         });
 
