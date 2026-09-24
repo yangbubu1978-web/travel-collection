@@ -289,6 +289,19 @@ header h1{
   background:var(--surface-subtle); color:var(--text-muted); font-weight:500;
 }
 .card-note{ font-size:var(--fs-lead); color:var(--text-base); line-height:1.7; margin-bottom:var(--sp-2); }
+/* 長備註先收合，維持卡片閱讀節奏（資料完全不動，只是顯示 3 行；點了才展開） */
+.card-note.clamped{
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3;
+  overflow:hidden;
+}
+.note-toggle{
+  display:block; width:100%; margin:0;
+  padding:10px 0; min-height:44px;
+  background:none; border:none; text-align:left;
+  font-family:var(--font-body); font-size:var(--fs-small); font-weight:600;
+  color:var(--primary); cursor:pointer;
+}
+.note-toggle:hover{ text-decoration:underline; color:var(--primary-deep); }
 .card-link{ display:inline-block; font-size:var(--fs-lead); color:var(--primary); text-decoration:none; font-weight:500; }
 .card-link:hover{ text-decoration:underline; color:var(--primary-deep); }
 
@@ -1514,6 +1527,33 @@ header h1{
                     </div>
                 </div>
             `}).join('');
+
+            applyNoteClamp();
+        }
+
+        // 長備註：卡片上只顯示 3 行 + 「展開全文 ▾」（純顯示，資料一個字都不動）
+        // 判定「有沒有真的溢出」而不是看字數 → 桌機多欄、手機單欄都準。
+        // ⚠️ 收合後只藏不到 2 行時乾脆不收（展開鈕本身 44px，硬收反而讓卡片變高）。
+        function applyNoteClamp() {
+            const notes = [...document.querySelectorAll('.card-note')];
+            if (!notes.length) return;
+            const fullH = notes.map(n => Math.round(n.getBoundingClientRect().height));   // 未收合高度
+            notes.forEach(n => n.classList.add('clamped'));
+            const clampH = notes.map(n => Math.round(n.getBoundingClientRect().height));  // 收合後高度
+            notes.forEach((note, i) => {
+                const hidden = fullH[i] - clampH[i];
+                if (hidden < 40) { note.classList.remove('clamped'); return; }            // 藏不到 2 行 → 原樣顯示
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'note-toggle';
+                btn.textContent = '展開全文 ▾';
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    const collapsed = note.classList.toggle('clamped');
+                    btn.textContent = collapsed ? '展開全文 ▾' : '收合 ▴';
+                });
+                note.after(btn);
+            });
         }
 
         window.editCard = function(id) {
@@ -1547,7 +1587,7 @@ header h1{
         // Event delegation for card buttons
         cardsGrid.addEventListener('click', (e) => {
             const cardEl = e.target.closest('.card');
-            if (cardEl && !e.target.closest('.card-action-btn')) {
+            if (cardEl && !e.target.closest('.card-action-btn, .note-toggle')) {
                 const linkEl = cardEl.querySelector('.card-address a');
                 if (linkEl) { window.open(linkEl.href, '_blank'); return; }
             }
