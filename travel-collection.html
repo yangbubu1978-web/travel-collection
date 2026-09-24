@@ -1155,6 +1155,57 @@ header h1{
             return false;
         }
 
+        // ========================================
+        // 節錄規則（2026-09-24）
+        // ========================================
+        // 為什麼要節錄：來源標題常夾帶帳號與站名（例：帳號 (@handle) • Instagram reel，實測 50 字），
+        // 描述更常見整篇貼文原文（實測 IG Reels 1,159 字）→ 直接倒進卡片會毀掉閱讀感。
+        // 這裡只做「節錄 + 清雜訊」，抓不到的內容編輯者再自己補。
+        const TITLE_MAX = 30;   // 標題上限（字）
+        const NOTE_MAX  = 120;  // 備註上限（字）
+
+        function tidyTitle(raw) {
+            if (!raw) return null;
+            let s = String(raw).replace(/\s+/g, ' ').trim();
+            // 去掉站名尾巴：• Instagram reel／| YouTube／- Facebook …
+            s = s.replace(/\s*[•·|｜–—-]\s*(Instagram|Facebook|YouTube|Threads|TikTok|Twitter|X|小紅書|抖音)\s*(reels?|videos?|shorts?|posts?|貼文|影片|短影片)?\s*$/i, '');
+            // 去掉帳號 handle、去頭尾引號
+            s = s.replace(/\s*[（(]\s*@[\w.\-]+\s*[)）]/g, '');
+            s = s.replace(/^[“”"「『]+/, '').replace(/[“”"」』]+\.?\s*$/, '');
+            s = s.trim();
+            const chars = [...s];
+            if (chars.length > TITLE_MAX) {
+                const head = chars.slice(0, TITLE_MAX).join('');
+                const sep = Math.max(head.lastIndexOf('｜'), head.lastIndexOf('|'), head.lastIndexOf('•'),
+                                     head.lastIndexOf('·'), head.lastIndexOf('，'), head.lastIndexOf(','));
+                s = (sep >= TITLE_MAX * 0.4 ? head.slice(0, sep)
+                                            : head.replace(/[\s，,、・|｜•·–—-]+$/, '')) + '…';
+            }
+            return s.trim() || null;
+        }
+
+        function tidyDesc(raw) {
+            if (!raw) return null;
+            let s = String(raw).replace(/\r/g, '').replace(/[ \t\u3000]+/g, ' ').trim();
+            // 社群樣板雜訊：「11K likes, 143 comments - rou_fooodie on July 24, 2026: ”」
+            s = s.replace(/^\s*\d[\d,.]*\s*[KMB]?\s*likes?,?\s*/i, '');
+            s = s.replace(/^\s*\d[\d,.]*\s*[KMB]?\s*comments?\s*[-–—:]\s*/i, '');
+            s = s.replace(/^\s*[\w.\-]+\s+on\s+[A-Z][a-z]+\s+\d{1,2},\s*\d{4}\s*[:：]\s*/i, '');
+            s = s.replace(/^[“”"「『]+/, '').replace(/[“”"」』]+\.?\s*$/, '');
+            // 尾巴一整排 hashtag 直接砍掉
+            s = s.replace(/(?:#\S+\s*){3,}$/, '').trim();
+            // 過長 → 優先切在句讀處，切不到就硬切（一律補「…」表示節錄）
+            const chars = [...s];
+            if (chars.length > NOTE_MAX) {
+                const head = chars.slice(0, NOTE_MAX).join('');
+                const cut = Math.max(head.lastIndexOf('。'), head.lastIndexOf('！'), head.lastIndexOf('？'),
+                                      head.lastIndexOf('；'), head.lastIndexOf('，'), head.lastIndexOf('\n'));
+                s = (cut >= NOTE_MAX * 0.5 ? head.slice(0, cut + 1)
+                                           : head.replace(/[\s，,、；;]+$/, '')) + '…';
+            }
+            return s.trim() || null;
+        }
+
         document.getElementById('fetchImageBtn').addEventListener('click', async () => {
             const link = document.getElementById('cardLink').value.trim();
             const btn = document.getElementById('fetchImageBtn');
@@ -1248,6 +1299,12 @@ header h1{
 
                 if (image && image.startsWith('//')) image = 'https:' + image;
 
+                // 節錄後才寫進欄位（原始長度留給 console 方便日後追）
+                const rawTitleLen = title ? [...String(title)].length : 0;
+                const rawNoteLen = desc ? [...String(desc)].length : 0;
+                title = tidyTitle(title);
+                desc = tidyDesc(desc);
+
                 // 4) 只填空著的欄位
                 const filled = [];
                 setIfEmpty('cardTitle', title, filled);
@@ -1260,11 +1317,13 @@ header h1{
                 }
 
                 if (filled.length) {
-                    console.log('自動帶入：' + filled.join(', ') + '（來源：' + source + '）');
+                    console.log('自動帶入：' + filled.join(', ') + '（來源：' + source + '）' +
+                        '｜節錄：標題 ' + rawTitleLen + '→' + (title ? [...title].length : 0) +
+                        ' 字／備註 ' + rawNoteLen + '→' + (desc ? [...desc].length : 0) + ' 字');
                 } else if (image) {
                     alert('欄位都已有內容，只更新了圖片預覽');
                 } else {
-                    alert('找不到資料，請手動填寫。\n\n（Instagram 貼文與 Reels 因 Meta 封鎖，無法自動抓取 — 請改用截圖或手打）');
+                    alert('找不到資料，請手動填寫。\n\n（Instagram 貼文／Reels 目前只有 Microlink 這條來源抓得到；若它今日免費額度（25 次）用完就會失敗，可改用截圖或手打）');
                 }
             } catch (error) {
                 console.error(error);

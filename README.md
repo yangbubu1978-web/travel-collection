@@ -65,7 +65,7 @@
 |---|---|---|---|
 | 部落格 / 一般網站 | 讀 HTML 的 Open Graph 標籤 | ✅ | `og:title`、`og:description`、`og:image`、`og:site_name` |
 | YouTube（含 Shorts） | oEmbed API（免 key、免註冊） | ✅ | 標題、頻道名、縮圖 |
-| Instagram（貼文 / Reels） | 無登入抓取 | ❌ | Meta 封鎖，實測 HTTP 200 但無 `og:title` |
+| Instagram（貼文 / Reels） | 直連抓取無效；改走 Microlink | ⚠️ | Microlink 可取得標題、圖片、簡介（實測 2026-09-24，內容為整篇貼文原文） |
 
 ### YouTube：oEmbed
 
@@ -121,7 +121,11 @@ https://i.ytimg.com/vi/<影片ID>/hqdefault.jpg       # 一定存在
 
 **行為特性**：
 - **只填還空著的欄位**，不會覆蓋已經打好的內容
+- **標題與備註一律節錄**（2026-09-24 新增）：來源標題常夾帶帳號與站名（例：`帳號 (@handle) • Instagram reel`，實測 50 字）、簡介更常是整篇貼文原文（實測 IG Reels **1,159 字**）→ 直接倒進卡片會毀掉閱讀感
+  - 標題上限 **30 字**、備註上限 **120 字**，超過就切在句讀處並補「…」（原文沒那麼長就原樣保留）
+  - 會清掉的雜訊：`• Instagram reel`／`| YouTube` 這類站名尾巴、`(@handle)`、`11K likes, 143 comments - 帳號 on 日期:` 這種社群樣板開頭、尾巴一整排 hashtag、頭尾引號
+  - 兩者都只是「起頭」，編輯者再自行補成完整內容
 - 所有外部請求都有 8-12 秒逾時，來源掛掉不會卡住表單
-- Instagram 一律抓不到（見上表），會顯示明確提示
+- Instagram 沒有 `og` 標籤，**只能靠 Microlink 這條來源**（免費層 25 次/天，用完就抓不到，會顯示明確提示）
 
 > ⚠️ 原本使用的 `api.allorigins.win` proxy 已淘汰：實測要 22-25 秒，且有時回 5xx。
