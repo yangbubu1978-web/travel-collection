@@ -55,4 +55,53 @@
 1. **App 內建瀏覽器**（Messenger／LINE／IG 等）：登入頁會顯示橘色警告並提供「複製網址」鈕 → 請改用 Safari／Chrome 開啟。
 2. **瀏覽器封鎖跨網站 Cookie**：按過登入卻又跳回登入頁（安靜失敗）→ 頁面會顯示「登入沒有完成」提示與排除步驟。
 
-> 權限以「登入帳號 email」判斷，**不依賴卡片資料欄位**，故無舊資料遷移風險，現有資料天然可讀。兩個網域共用同一個 Firestore 專案，資料完全同步。
+> 權限以「登入帳號 email」判斷，**不依賴卡片資料欄位**，故無舊資料遷移風險，現有資料天然可讀。
+
+## 🔎 補充景點資料的來源對照（2026-09-24 實測）
+
+給協助編輯者補資料的人（目前是小布）參考。實測條件：一般網路環境、未登入任何服務。
+
+| 來源 | 抓取方式 | 可行性 | 可取得欄位 |
+|---|---|---|---|
+| 部落格 / 一般網站 | 讀 HTML 的 Open Graph 標籤 | ✅ | `og:title`、`og:description`、`og:image`、`og:site_name` |
+| YouTube（含 Shorts） | oEmbed API（免 key、免註冊） | ✅ | 標題、頻道名、縮圖 |
+| Instagram（貼文 / Reels） | 無登入抓取 | ❌ | Meta 封鎖，實測 HTTP 200 但無 `og:title` |
+
+### YouTube：oEmbed
+
+```
+https://www.youtube.com/oembed?url=<影片網址>&format=json
+```
+
+回傳：
+
+```json
+{
+  "title": "影片標題",
+  "author_name": "頻道名稱",
+  "thumbnail_url": "https://i.ytimg.com/vi/<id>/hqdefault.jpg"
+}
+```
+
+`watch?v=` / `/shorts/` / `youtu.be/` 三種形式都支援（網址要 URL-encode）。
+
+縮圖也可直接組，完全不需請求：
+
+```
+https://i.ytimg.com/vi/<影片ID>/maxresdefault.jpg   # 最高解析（不一定存在）
+https://i.ytimg.com/vi/<影片ID>/hqdefault.jpg       # 一定存在
+```
+
+### 部落格 / 一般網站
+
+抓 `<meta property="og:...">`。多數網站為了社群分享預覽都會提供。
+用社群爬蟲的 User-Agent（如 `facebookexternalhit/1.1`）成功率較高。
+
+### Instagram：不建議自動化
+
+未登入時公開頁面幾乎不回傳任何 og 標籤。可行的自動化方式都需要「登入 session + 住宅代理」，
+成本高、不穩定，且 Meta 明確禁止，帳號會被鎖。
+**請改用人工：截圖，或直接手打店名／地址。**
+
+> 目前的流程：Prosaist 貼上原始連結 → 小布協助補完欄位。
+> 若日後要做成站內功能（貼網址自動帶入），這張表就是可行性依據。
