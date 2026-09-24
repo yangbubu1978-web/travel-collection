@@ -1130,55 +1130,147 @@ header h1{
         cancelBtn.addEventListener('click', () => modal.classList.remove('show'));
         modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
 
+        // ========================================
+        // 從網址自動帶入（2026-09-24 擴充）
+        // ========================================
+        // 原本只抓 og:image，現在擴充為「標題 + 圖片 + 描述」一次帶入。
+        // 來源分流：
+        //   YouTube（含 Shorts）→ 官方 oEmbed（免 key，且回應帶 CORS 標頭，前端可直呼）
+        //   其他網站            → 透過公開 CORS proxy 讀 Open Graph 標籤
+        //   Instagram           → Meta 封鎖無登入抓取，會抓不到（已寫進 README）
+        // 原則：只填「還空著的欄位」，不覆蓋編輯者已經打好的內容。
+        function extractYouTubeId(url) {
+            if (!url) return null;
+            const m = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+            return m ? m[1] : null;
+        }
+
+        function setIfEmpty(id, val, filled) {
+            const el = document.getElementById(id);
+            if (val && el && !el.value.trim()) {
+                el.value = val;
+                filled.push(id);
+                return true;
+            }
+            return false;
+        }
+
         document.getElementById('fetchImageBtn').addEventListener('click', async () => {
-            const link = document.getElementById('cardLink').value;
-            const title = document.getElementById('cardTitle').value;
+            const link = document.getElementById('cardLink').value.trim();
             const btn = document.getElementById('fetchImageBtn');
+
+            if (!link) {
+                alert('請先在左邊的「連結」欄位貼上網址');
+                return;
+            }
+
+            const orig = btn.textContent;
             btn.textContent = '⏳';
             btn.disabled = true;
 
             try {
-                let imageUrl = null;
-                if (link) {
+                let title = null, image = null, desc = null, source = '';
+
+                // 帶逾時的 fetch（避免來源 hang 住整個表單）
+                const fetchT = async (url, ms) => {
+                    const ctrl = new AbortController();
+                    const t = setTimeout(() => ctrl.abort(), ms);
                     try {
-                        const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(link);
-                        const response = await fetch(proxyUrl);
-                        const data = await response.json();
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(data.contents, 'text/html');
-                        imageUrl = doc.querySelector('meta[property="og:image"]')?.content || doc.querySelector('meta[name="twitter:image"]')?.content;
-                    } catch (e) { console.log('Link fetch failed'); }
+                        return await fetch(url, { signal: ctrl.signal });
+                    } finally {
+                        clearTimeout(t);
+                    }
+                };
+
+                // 1) YouTube（含 Shorts / youtu.be）→ 官方 oEmbed
+                //    最快、免 key、無次數限制，且回應帶 CORS 標頭可直呼
+                const ytId = extractYouTubeId(link);
+                if (ytId) {
+                    try {
+                        const r = await fetchT('https://www.youtube.com/oembed?url=' +
+                            encodeURIComponent('https://www.youtube.com/watch?v=' + ytId) + '&format=json', 8000);
+                        if (r.ok) {
+                            const d = await r.json();
+                            title = d.title || null;
+                            image = d.thumbnail_url || ('https://i.ytimg.com/vi/' + ytId + '/maxresdefault.jpg');
+                            desc = d.author_name ? ('YouTube 頻道：' + d.author_name) : null;
+                            source = 'YouTube oEmbed';
+                        }
+                    } catch (e) { console.log('YouTube oEmbed failed', e); }
                 }
 
-                if (!imageUrl && title) {
+                // 2) 一般網站 → Microlink（實測 2.5 秒、回傳結構化 JSON）
+                //    免費層 25 次/天，額度用完會回 429，屆時走第 3 步的後援
+                if (!title || !image) {
                     try {
-                        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&pithumbsize=500&format=json&origin=*`;
-                        const response = await fetch(wikiUrl);
-                        const data = await response.json();
-                        const pages = data.query?.pages;
-                        if (pages) {
-                            for (const pageId in pages) {
-                                if (pages[pageId].thumbnail) {
-                                    imageUrl = pages[pageId].thumbnail.source;
-                                    break;
+                        const r = await fetchT('https://api.microlink.io/?url=' + encodeURIComponent(link), 12000);
+                        if (r.ok) {
+                            const d = await r.json();
+                            const dd = d.data || {};
+                            title = title || dd.title || null;
+                            image = image || (dd.image && dd.image.url) || null;
+                            desc  = desc  || dd.description || null;
+                            if (!source && (title || image)) source = 'Microlink';
+                        }
+                    } catch (e) { console.log('Microlink failed', e); }
+                }
+
+                // 3) Microlink 失敗/額度用完 → r.jina.ai（免費、額度較寬，但只有文字）
+                if (!title) {
+                    try {
+                        const r = await fetchT('https://r.jina.ai/' + link, 12000);
+                        if (r.ok) {
+                            const txt = await r.text();
+                            const m = txt.match(/^\s*Title:\s*(.+)$/m);
+                            if (m) { title = m[1].trim(); source = source || 'r.jina.ai'; }
+                        }
+                    } catch (e) { console.log('jina failed', e); }
+                }
+
+                // 4) 只有標題、沒有圖 → 試 Wikipedia（原本就有的後援）
+                if (!image) {
+                    const guess = title || document.getElementById('cardTitle').value.trim();
+                    if (guess) {
+                        try {
+                            const wr = await fetchT('https://zh.wikipedia.org/w/api.php?action=query&titles=' +
+                                encodeURIComponent(guess) + '&prop=pageimages&pithumbsize=500&format=json&origin=*', 8000);
+                            const wd = await wr.json();
+                            const pages = wd.query && wd.query.pages;
+                            if (pages) {
+                                for (const pid in pages) {
+                                    if (pages[pid].thumbnail) { image = pages[pid].thumbnail.source; break; }
                                 }
                             }
-                        }
-                    } catch (e) { console.log('Wiki failed'); }
+                            if (image && !source) source = 'Wikipedia';
+                        } catch (e) { console.log('Wiki failed', e); }
+                    }
                 }
 
-                if (imageUrl) {
-                    if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
-                    document.getElementById('cardImage').value = imageUrl;
-                    document.getElementById('previewImg').src = imageUrl;
+                if (image && image.startsWith('//')) image = 'https:' + image;
+
+                // 4) 只填空著的欄位
+                const filled = [];
+                setIfEmpty('cardTitle', title, filled);
+                setIfEmpty('cardImage', image, filled);
+                setIfEmpty('cardNote', desc, filled);
+
+                if (image) {
+                    document.getElementById('previewImg').src = image;
                     document.getElementById('imagePreview').style.display = 'block';
+                }
+
+                if (filled.length) {
+                    console.log('自動帶入：' + filled.join(', ') + '（來源：' + source + '）');
+                } else if (image) {
+                    alert('欄位都已有內容，只更新了圖片預覽');
                 } else {
-                    alert('找不到圖片，請手動貼上圖片網址');
+                    alert('找不到資料，請手動填寫。\n\n（Instagram 貼文與 Reels 因 Meta 封鎖，無法自動抓取 — 請改用截圖或手打）');
                 }
             } catch (error) {
-                alert('抓取失敗');
+                console.error(error);
+                alert('抓取失敗，請確認網址是否正確，或稍後再試');
             } finally {
-                btn.textContent = '🔍';
+                btn.textContent = orig;
                 btn.disabled = false;
             }
         });
