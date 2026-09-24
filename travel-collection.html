@@ -668,7 +668,7 @@ header h1{
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -911,6 +911,77 @@ header h1{
             if (retryBtn) retryBtn.style.display = (!serverSynced && waited > 20) ? 'block' : 'none';
         }
 
+        // ========================================
+        // 卡片本地快取（2026-09-24）
+        // ========================================
+        // 為什麼要：訪客端原本用 onSnapshot 監聽整個 collection，
+        // 每次打開網頁就是固定 154 次 Firestore 讀取（免費額度 5 萬次/天）。
+        // 改成「快取優先、過期才讀一次」，重複瀏覽同一份資料不再扣讀取次數。
+        // 編輯者不受影響，仍走 onSnapshot 即時同步（他們需要看到別人的變更）。
+        const CARDS_CACHE_KEY = 'tc_cards_cache_v1';
+        const CARDS_CACHE_TTL = 30 * 60 * 1000; // 30 分鐘
+
+        function readCardsCache() {
+            try {
+                const raw = localStorage.getItem(CARDS_CACHE_KEY);
+                if (!raw) return null;
+                const data = JSON.parse(raw);
+                if (!data || !data.timestamp || !Array.isArray(data.cards) || !data.cards.length) return null;
+                if (Date.now() - data.timestamp > CARDS_CACHE_TTL) return null;
+                return data.cards;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function writeCardsCache(list) {
+            try {
+                if (!Array.isArray(list) || !list.length) return;
+                localStorage.setItem(CARDS_CACHE_KEY, JSON.stringify({
+                    timestamp: Date.now(),
+                    cards: list
+                }));
+            } catch (e) { /* 儲存空間不足就算了，不影響瀏覽 */ }
+        }
+
+        // 訪客路徑：先用快取顯示，過期才真的讀一次 Firestore
+        async function loadCardsOnce() {
+            const cached = readCardsCache();
+            if (cached) {
+                cards = cached;
+                serverSynced = true;
+                lastServerCount = cached.length;
+                lastFromCache = true;
+                syncStatus.textContent = '✓ 已載入';
+                syncStatus.classList.add('synced');
+                if (loading) loading.style.display = 'none';
+                renderCards();
+                renderSyncDiag();
+                return;
+            }
+
+            try {
+                const snapshot = await getDocs(collection(db, "cards"));
+                cards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                writeCardsCache(cards);
+                serverSynced = true;
+                lastServerCount = cards.length;
+                lastFromCache = false;
+                lastErrorCode = '';
+                syncStatus.textContent = '✓ 已同步';
+                syncStatus.classList.add('synced');
+                if (loading) loading.style.display = 'none';
+            } catch (error) {
+                console.error("Error:", error);
+                lastErrorCode = (error && error.code) ? String(error.code) : '未知錯誤';
+                syncStatus.textContent = '⚠️ 載入失敗';
+                syncStatus.classList.remove('synced');
+                if (loading) loading.style.display = 'none';
+            }
+            renderCards();
+            renderSyncDiag();
+        }
+
         function startCardsListener() {
             if (unsubscribeCards) { try { unsubscribeCards(); } catch (e) {} unsubscribeCards = null; }
             serverSynced = false;
@@ -925,32 +996,40 @@ header h1{
             }
             renderSyncDiag();
 
-            unsubscribeCards = onSnapshot(collection(db, "cards"), (snapshot) => {
-                cards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                lastFromCache = !!(snapshot.metadata && snapshot.metadata.fromCache);
-                if (lastFromCache) {
-                    // 本地快取（可能還是空的）不算連上伺服器，不要亮綠燈
-                    syncStatus.textContent = '🔄 載入中...';
+            // 編輯者：即時同步（順便把最新資料寫進快取，讓訪客下次直接用）
+            if (isEditor()) {
+                unsubscribeCards = onSnapshot(collection(db, "cards"), (snapshot) => {
+                    cards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    lastFromCache = !!(snapshot.metadata && snapshot.metadata.fromCache);
+                    if (lastFromCache) {
+                        // 本地快取（可能還是空的）不算連上伺服器，不要亮綠燈
+                        syncStatus.textContent = '🔄 載入中...';
+                        syncStatus.classList.remove('synced');
+                        if (loading) loading.style.display = 'block';
+                    } else {
+                        serverSynced = true;
+                        lastServerCount = cards.length;
+                        writeCardsCache(cards);
+                        syncStatus.textContent = '✓ 已同步';
+                        syncStatus.classList.add('synced');
+                        if (loading) loading.style.display = 'none';
+                    }
+                    renderCards();
+                    renderSyncDiag();
+                }, (error) => {
+                    console.error("Error:", error);
+                    lastErrorCode = (error && error.code) ? String(error.code) : '未知錯誤';
+                    syncStatus.textContent = '⚠️ 同步失敗';
                     syncStatus.classList.remove('synced');
-                    if (loading) loading.style.display = 'block';
-                } else {
-                    serverSynced = true;
-                    lastServerCount = cards.length;
-                    syncStatus.textContent = '✓ 已同步';
-                    syncStatus.classList.add('synced');
                     if (loading) loading.style.display = 'none';
-                }
-                renderCards();
-                renderSyncDiag();
-            }, (error) => {
-                console.error("Error:", error);
-                lastErrorCode = (error && error.code) ? String(error.code) : '未知錯誤';
-                syncStatus.textContent = '⚠️ 同步失敗';
-                syncStatus.classList.remove('synced');
-                if (loading) loading.style.display = 'none';
-                renderCards();
-                renderSyncDiag();
-            });
+                    renderCards();
+                    renderSyncDiag();
+                });
+                return;
+            }
+
+            // 訪客：不建立監聽，只讀一次（大幅降低 Firestore 讀取量）
+            loadCardsOnce();
         }
 
         function initFirestore() {
