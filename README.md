@@ -24,11 +24,16 @@
 
 ## ⚠️ 部署須知
 
-- 前端（HTML）改完 push 即自動更新 GitHub Pages（等 build，`cache-control: max-age=600`）。
-- **同一個檔案也部署在 Firebase Hosting**（`firebase deploy --only hosting`）：
-  - `https://travel-collection-34302.firebaseapp.com/` ← **建議手機使用者用這個網址**
-  - `https://travel-collection-34302.web.app/`
-  - Hosting 的 HTML 已設 `Cache-Control: no-cache`，不會有舊版快取問題
+**唯一對外網址（2026-09-24 起）**：
+- `https://travel-collection-34302.firebaseapp.com/` ← **主要網址，手機／桌機都用這個**
+- `https://travel-collection-34302.web.app/`（同一個站，備用網址）
+
+> GitHub Pages（`yangbubu1978-web.github.io/travel-collection/`）已於 2026-09-24 **停用**。
+> 原因：維護兩條路徑沒有任何好處（流量限制較寬的部分實際用不到，真正會先撞到的是 Firestore 額度），
+> 而且少一道門才守得住「網址不外流」的策略。若日後需要緊急備援，在 repo Settings → Pages 重新開啟即可。
+
+- 部署指令：`firebase deploy --only hosting`（`public` 指向 repo 根目錄）
+- Hosting 的 HTML 已設 `Cache-Control: no-cache`，不會有舊版快取問題
 - Firestore rules 需 deploy 才生效：
   ```
   firebase deploy --only firestore:rules
@@ -42,9 +47,8 @@
 - 改 `travel-collection-34302.web.app` → Google 直接回 **`redirect_uri_mismatch`**（OAuth 用戶端只認 firebaseapp.com 的 `/__/auth/handler`），登入全掛。
 - 因此「同源登入」的做法是**把 App 也放到 firebaseapp.com 上**（Firebase Hosting 同時服務 `.web.app` 與 `.firebaseapp.com`），而不是改 authDomain。
 - 📱 **手機／內建瀏覽器請用 `https://travel-collection-34302.firebaseapp.com/`**：網頁與登入處理頁同一個網域，不會被「跨網站 Cookie 封鎖／儲存空間隔離」擋掉。
-- 桌機用 GitHub Pages 或上面任一網址都正常。
 - 🆕 **2026-09-23 起訪客不需要登入**：`read` 已開放，單純瀏覽不會碰到同源限制。只有要編輯時才需要登入。
-- `github.io` 網址會自動轉到 `firebaseapp.com`；加 `?stay=1` 可留在 GitHub 版（測試用）。
+- 🆕 **2026-09-24 起 GitHub Pages 已停用**，只剩 Firebase 一個網址，不必再區分「電腦用／手機用」。
 
 ## 🆘 登入失敗的兩種情境（前端已內建提示）
 
